@@ -4,6 +4,34 @@
 import sys, random, math
 from PyQt4 import QtGui, QtCore
 
+class Color:
+    def __init__(self, name, r, g, b):
+        self.name = name
+        self.r = r
+        self.g = g
+        self.b = b
+
+        self.brush = QtGui.QBrush(QtGui.QColor(r, g, b))
+
+COLORS = [
+    Color("Blue", 0, 0, 255),
+    Color("Light blue", 128, 128, 255),
+    Color("Green", 0, 255, 0),
+    Color("Red", 255, 0, 0),
+    Color("Yellow", 255, 255, 0),
+    Color("Brown", 150, 75, 0),
+    Color("White", 255, 255, 255),
+    Color("Black", 0, 0, 0)
+]
+
+_currentColor = -1
+
+def getNextColor():
+    global _currentColor
+
+    _currentColor = (_currentColor + 1) % len(COLORS)
+    return COLORS[_currentColor]
+
 class Point:
     def __init__(self, x, y):
         self.x = float(x)
@@ -66,19 +94,17 @@ class Marker:
     BOX, RECTANGLE, CROSS = range(3)
 
     def __init__(self):
-        self.shape = Marker.RECTANGLE
+        self.shape = random.randint(0, Marker.CROSS)
 
         self.pen = QtGui.QPen(QtCore.Qt.black)
         self.pen.setWidthF(1.0)
 
-        self.brush = QtGui.QBrush(QtGui.QColor(150, 75, 0))
-
     def size(self):
         return Marker.SIZE
 
-    def paint(self, pnt, x):
+    def paint(self, pnt, color, x):
         pnt.setPen(self.pen)
-        pnt.setBrush(self.brush)
+        pnt.setBrush(color.brush)
 
         #pnt.drawLine(x, -Marker.SIZE / 2.0, x, Marker.SIZE / 2.0)
         #pnt.drawLine(x, 0, x, Marker.SIZE)
@@ -91,11 +117,18 @@ class Marker:
         elif self.shape == Marker.RECTANGLE:
             size /= 3.0
             pnt.drawRect(x, -size / 2, Marker.SIZE, size)
+        elif self.shape == Marker.CROSS:
+            # FIXME: implement
+            size /= 3.0
+            pnt.drawRect(x, -size / 2, Marker.SIZE, size)
+            pnt.drawRect(x + Marker.SIZE / 2 - size / 2,
+                         -Marker.SIZE / 2,
+                         size, Marker.SIZE)
 
 class Route:
     def __init__(self):
         self.level = "5.10a"
-        self.color = "Brown"
+        self.color = getNextColor()
         self.marker = Marker()
 
         self.x = 0
@@ -140,7 +173,7 @@ class Route:
 
         #pnt.drawLine(0, 0, self.offset, 0)
 
-        s = "%s %s" % (self.level, self.color)
+        s = "%s %s" % (self.level, self.color.name)
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
 
         if self.flipSide:
@@ -157,7 +190,7 @@ class Route:
 #         pnt.drawText(10, 0, 200, 200, QtCore.Qt.AlignVCenter,
 #                      "%s %s" % (self.level, self.color))
 
-        self.marker.paint(pnt, x)
+        self.marker.paint(pnt, self.color, x)
         pnt.restore()
 
 class CWall(QtGui.QWidget):
