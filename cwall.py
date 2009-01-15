@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # coding: Latin-1
 
+import util
+
 import sys, random, math
 from PyQt4 import QtGui, QtCore
 
@@ -88,6 +90,35 @@ class Wall:
     def __init__(self, p1, p2):
         self.p1 = p1
         self.p2 = p2
+
+class Walls:
+    def __init__(self):
+        self.points = [
+            Point(600, 550),
+            Point(620, 400),
+            Point(750, 200),
+            Point(740, 100),
+            Point(150, 90),
+            Point(100, 80),
+            Point(50, 350),
+            Point(125, 410),
+            Point(35, 440),
+            Point(30, 550)
+            ]
+
+        self.walls = []
+
+        for i in xrange(1, len(self.points)):
+            self.walls.append(Wall(self.points[i - 1], self.points[i]))
+
+        self.pen = QtGui.QPen(QtCore.Qt.black)
+        self.pen.setWidthF(2.0)
+
+    def paint(self, pnt):
+        pnt.setPen(self.pen)
+
+        for wall in self.walls:
+            pnt.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
 
 class Marker:
     SIZE = 18
@@ -214,28 +245,13 @@ class CWall(QtGui.QWidget):
         self.setWindowTitle("Climbing walls")
         self.setMouseTracking(True)
         self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
+        #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
 
         self.mousePos = Point(-1, -1)
         self.route = Route()
         self.routes = []
 
-        self.points = [
-            Point(600, 550),
-            Point(620, 400),
-            Point(750, 200),
-            Point(740, 100),
-            Point(150, 90),
-            Point(100, 80),
-            Point(50, 350),
-            Point(125, 410),
-            Point(35, 440),
-            Point(30, 550)
-            ]
-
-        self.walls = []
-
-        for i in xrange(1, len(self.points)):
-            self.walls.append(Wall(self.points[i - 1], self.points[i]))
+        self.walls = Walls()
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -262,6 +278,11 @@ class CWall(QtGui.QWidget):
             pnt.end()
 
             print "saved PDF file"
+        elif key == QtCore.Qt.Key_T:
+            zz = util.TimerDev("50 paints")
+
+            for i in xrange(50):
+                self.repaint()
 
     def mouseMoveEvent(self, event):
         self.mousePos = Point(event.x(), event.y())
@@ -281,12 +302,7 @@ class CWall(QtGui.QWidget):
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
 
-        pen = QtGui.QPen(QtCore.Qt.black)
-        pen.setWidthF(2.0)
-        pnt.setPen(pen)
-
-        for wall in self.walls:
-            pnt.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
+        self.walls.paint(pnt)
 
         pen = QtGui.QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
@@ -306,7 +322,7 @@ class CWall(QtGui.QWidget):
         closestT = None
         closestWall = None
 
-        for wall in self.walls:
+        for wall in self.walls.walls:
             closest, t = closestPoint(wall.p1, wall.p2, self.mousePos)
 
             dst = closest.distanceTo(self.mousePos)
