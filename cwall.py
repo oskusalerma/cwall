@@ -26,6 +26,8 @@ COLORS = [
 
 _currentColor = -1
 
+mypd = None
+
 def getNextColor():
     global _currentColor
 
@@ -138,7 +140,9 @@ class Route:
         self.angle = 0.0
         self.wall = None
 
-        self.font = QtGui.QFont("Helvetica", 18)
+        self.font = QtGui.QFont("DejaVu Sans Mono", 18)
+        #self.font = QtGui.QFontDialog.getFont(self.font)[0]
+
         self.fontMetrics = QtGui.QFontMetrics(self.font)
 
         self.offset = 10
@@ -167,9 +171,18 @@ class Route:
 
     def paint(self, pnt):
         pnt.save()
-        pnt.setFont(self.font)
+
+        if mypd and 0:
+            # FIXME: remove
+            font = QtGui.QFont(self.font, mypd)
+            pnt.setFont(font)
+        else:
+            pnt.setFont(self.font)
+
         pnt.translate(self.x, self.y)
         pnt.rotate(self.angle)
+
+        #pnt.scale(0.5, 0.5)
 
         #pnt.drawLine(0, 0, self.offset, 0)
 
@@ -234,39 +247,59 @@ class CWall(QtGui.QWidget):
             self.routes.append(self.route)
             self.route = Route()
             self.update()
+        elif key == QtCore.Qt.Key_S:
+            global mypd
+            #printer = QtGui.QPrinter(QtGui.QPrinter.HighResolution)
+            printer = QtGui.QPrinter(QtGui.QPrinter.ScreenResolution)
+            printer.setOutputFileName("wall.pdf")
+            #printer.setResolution(1200)
+
+            mypd = printer
+
+            pnt = QtGui.QPainter()
+            pnt.begin(printer)
+            self.paint(pnt)
+            pnt.end()
+
+            print "saved PDF file"
 
     def mouseMoveEvent(self, event):
         self.mousePos = Point(event.x(), event.y())
         self.update()
 
     def paintEvent(self, event):
-        paint = QtGui.QPainter()
-        paint.begin(self)
+        pnt = QtGui.QPainter()
+        pnt.begin(self)
 
+        self.paint(pnt)
+
+        pnt.end()
+
+    def paint(self, pnt):
         #size = self.size()
 
-        paint.setRenderHint(QtGui.QPainter.Antialiasing)
-        paint.setRenderHint(QtGui.QPainter.TextAntialiasing)
+        pnt.setRenderHint(QtGui.QPainter.Antialiasing)
+        pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
 
         pen = QtGui.QPen(QtCore.Qt.black)
         pen.setWidthF(2.0)
-        paint.setPen(pen)
+        pnt.setPen(pen)
 
         for wall in self.walls:
-            paint.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
+            pnt.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
 
         pen = QtGui.QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
-        paint.setPen(pen)
+        pnt.setPen(pen)
 
-        paint.drawEllipse(self.mousePos.x - 2.5, self.mousePos.y - 2.5, 5, 5)
+        pnt.drawEllipse(self.mousePos.x - 2.5, self.mousePos.y - 2.5, 5, 5)
 
         pen = QtGui.QPen(QtCore.Qt.blue)
         pen.setWidthF(2.0)
-        paint.setPen(pen)
+        pnt.setPen(pen)
 
         for route in self.routes:
-            route.paint(paint)
+            route.paint(pnt)
 
         closestDistance = 99999999.9
         closestPt = None
@@ -285,12 +318,10 @@ class CWall(QtGui.QWidget):
                 closestWall = wall
 
         if closestPt:
-            #paint.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
+            #pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
 
             self.route.attachTo(closestWall, closestPt, closestT)
-            self.route.paint(paint)
-
-        paint.end()
+            self.route.paint(pnt)
 
 app = QtGui.QApplication(sys.argv)
 dt = CWall()
