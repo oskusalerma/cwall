@@ -181,11 +181,18 @@ class Route:
 
     def attachTo(self, wall, closestPt, t):
         self.wall = wall
-        self.x = closestPt.x
-        self.y = closestPt.y 
         self.t = t
 
+        self.recalcPos()
+
+    def recalcPos(self):
         AB = self.wall.p2 - self.wall.p1
+
+        pos = self.wall.p1 + AB * self.t
+
+        self.x = pos.x
+        self.y = pos.y
+
         AB.y = -AB.y
 
         if AB.x != 0:
@@ -248,10 +255,18 @@ class CWall(QtGui.QWidget):
         #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
 
         self.mousePos = Point(-1, -1)
+        self.mouseDown = False
         self.route = Route()
         self.routes = []
 
         self.walls = Walls()
+
+        self.wallEdit = True
+
+        # wall editing stuff
+
+        # closest wall point
+        self.closestWallPt = None
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -278,14 +293,43 @@ class CWall(QtGui.QWidget):
             pnt.end()
 
             print "saved PDF file"
+        elif key == QtCore.Qt.Key_W:
+            if not self.wallEdit:
+                self.wallEdit = True
+            else:
+                self.wallEdit = False
+
+            self.update()
+
         elif key == QtCore.Qt.Key_T:
             zz = util.TimerDev("50 paints")
 
             for i in xrange(50):
                 self.repaint()
 
+    def wallEditActivity(self):
+        if self.wallEdit and self.mouseDown and self.closestWallPt:
+            self.closestWallPt.x = self.mousePos.x
+            self.closestWallPt.y = self.mousePos.y
+
+        # TODO: optimize this, we only need to recalc the routes belonging
+        # to the two wall segments touching the modified point
+        for route in self.routes:
+            route.recalcPos()
+
     def mouseMoveEvent(self, event):
         self.mousePos = Point(event.x(), event.y())
+        self.wallEditActivity()
+        self.update()
+
+    def mousePressEvent(self, event):
+        self.mouseDown = True
+        self.wallEditActivity()
+        self.update()
+
+    def mouseReleaseEvent(self, event):
+        self.mouseDown = False
+        self.wallEditActivity()
         self.update()
 
     def paintEvent(self, event):
@@ -314,30 +358,50 @@ class CWall(QtGui.QWidget):
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
-        for route in self.routes:
-            route.paint(pnt)
+        if self.wallEdit:
+            closestDistance = 99999999.9
+            closestPt = None
 
-        closestDistance = 99999999.9
-        closestPt = None
-        closestT = None
-        closestWall = None
+            for pt in self.walls.points:
+                dst = pt.distanceTo(self.mousePos)
 
-        for wall in self.walls.walls:
-            closest, t = closestPoint(wall.p1, wall.p2, self.mousePos)
+                if dst < closestDistance:
+                    closestDistance = dst
+                    closestPt = pt
 
-            dst = closest.distanceTo(self.mousePos)
+            if closestPt:
+                pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
+                self.closestWallPt = closestPt
 
-            if dst < closestDistance:
-                closestDistance = dst
-                closestPt = closest
-                closestT = t
-                closestWall = wall
+            # FIXME: debug stuff, remove
+            for route in self.routes:
+                route.paint(pnt)
 
-        if closestPt:
-            #pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
+        else:
+            for route in self.routes:
+                route.paint(pnt)
 
-            self.route.attachTo(closestWall, closestPt, closestT)
-            self.route.paint(pnt)
+            closestDistance = 99999999.9
+            closestPt = None
+            closestT = None
+            closestWall = None
+
+            for wall in self.walls.walls:
+                closest, t = closestPoint(wall.p1, wall.p2, self.mousePos)
+
+                dst = closest.distanceTo(self.mousePos)
+
+                if dst < closestDistance:
+                    closestDistance = dst
+                    closestPt = closest
+                    closestT = t
+                    closestWall = wall
+
+            if closestPt:
+                #pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
+
+                self.route.attachTo(closestWall, closestPt, closestT)
+                self.route.paint(pnt)
 
 app = QtGui.QApplication(sys.argv)
 dt = CWall()
