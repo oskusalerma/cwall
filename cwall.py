@@ -30,6 +30,35 @@ COLORS = [
 
 _currentColor = -1
 
+# misc globally needed stuff
+class Main:
+    # modes
+    WALL_MOVE, WALL_ADD, WALL_DELETE, ROUTE_ADD, ROUTE_EDIT = range(5)
+
+    modeNames = {
+        WALL_MOVE : "Move walls",
+        WALL_ADD : "Add walls",
+        WALL_DELETE : "Delete walls",
+        ROUTE_ADD : "Add routes",
+        ROUTE_EDIT : "Edit routes"
+        }
+
+    def __init__(self):
+        self.modeCombo = None
+
+        # main widget (CWall)
+        self.w = None
+
+    def setMode(self, mode):
+        self.mode = mode
+
+    def modeComboActivated(self):
+        mode = self.modeCombo.itemData(self.modeCombo.currentIndex()).toInt()[0]
+        if mode != self.mode:
+            print "changing mode to %s" % mode
+            self.mode = mode
+
+M = Main()
 mypd = None
 
 def getNextColor():
@@ -250,8 +279,7 @@ class CWall(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
 
-        self.setGeometry(400, 50, 800, 700)
-        self.setWindowTitle("Climbing walls")
+        self.setFocusPolicy(QtCore.Qt.WheelFocus)
         self.setMouseTracking(True)
         self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
@@ -405,7 +433,53 @@ class CWall(QtGui.QWidget):
                 self.route.attachTo(closestWall, closestPt, closestT)
                 self.route.paint(pnt)
 
-app = QtGui.QApplication(sys.argv)
-dt = CWall()
-dt.show()
-app.exec_()
+
+
+def main():
+    app = QtGui.QApplication(sys.argv)
+
+    mw = QtGui.QMainWindow()
+    mw.setGeometry(400, 50, 850, 700)
+    mw.setWindowTitle("Climbing walls")
+
+    w = QtGui.QWidget()
+    vbox = QtGui.QVBoxLayout(w)
+    hbox = QtGui.QHBoxLayout()
+
+    M.modeCombo = QtGui.QComboBox(w)
+
+    for key, val in M.modeNames.iteritems():
+        M.modeCombo.addItem(val, QtCore.QVariant(key))
+
+    M.modeCombo.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+
+    QtCore.QObject.connect(M.modeCombo, QtCore.SIGNAL("activated(int)"),
+                           M.modeComboActivated)
+
+    hbox.addWidget(M.modeCombo)
+    hbox.addStretch()
+
+    hbox.setContentsMargins(5, 5, 5, 5)
+
+    vbox.addLayout(hbox)
+
+    sep = QtGui.QFrame(w)
+    sep.setFrameStyle(QtGui.QFrame.HLine)
+    vbox.addWidget(sep)
+
+    M.w = CWall(w)
+
+    vbox.addWidget(M.w, 1)
+
+    vbox.setSpacing(0)
+    vbox.setContentsMargins(0, 0, 0, 0)
+
+    mw.setCentralWidget(w)
+
+    M.setMode(Main.WALL_MOVE)
+
+    mw.show()
+
+    app.exec_()
+
+main()
