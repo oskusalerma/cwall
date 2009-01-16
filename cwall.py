@@ -78,6 +78,9 @@ class Main:
 
 # base class for modes
 class Mode:
+    def __init__(self, drawEndPoints = False):
+        self.drawEndPoints = drawEndPoints
+
     # mode activated
     def activate(self):
         raise "abstract method called"
@@ -94,8 +97,10 @@ class Mode:
     def paint(self, pnt):
         raise "abstract method called"
 
-class WallMoveMode:
+class WallMoveMode(Mode):
     def __init__(self):
+        Mode.__init__(self, True)
+
         # wall editing stuff
 
         # closest wall end point
@@ -145,25 +150,60 @@ class WallMoveMode:
             route.paint(pnt)
 
 
-class WallAddMode:
+class WallAddMode(Mode):
     def __init__(self):
-        pass
+        Mode.__init__(self, True)
+
+        self.closestPt = None
+        self.closestWall = None
 
     def activate(self):
         print "activating wall add mode"
 
     def buttonEvent(self, isPress):
-        pass
+        if isPress and self.closestWall:
+            w = self.closestWall
+
+            pt = Point(self.closestPt.x, self.closestPt.y)
+
+            ptIdx = M.walls.points.index(w.p2)
+            M.walls.points.insert(ptIdx, pt)
+
+            wallIdx = M.walls.walls.index(w)
+
+            # FIXME: divide routes belonging to w among w/wNew, and adjust
+            # their t parameters
+
+            wNew = Wall(w.p1, pt)
+            w.p1 = pt
+
+            M.walls.walls.insert(wallIdx, wNew)
 
     def moveEvent(self):
-        pass
+        closestPt, closestWall, closestT = getClosestPoint()
+
+        if closestPt:
+            self.closestPt = closestPt
+
+        # one can't split a wall at its end points
+        if closestT not in (1.0, 0.0):
+            self.closestWall = closestWall
+        else:
+            self.closestWall = None
 
     def paint(self, pnt):
-        pass
+        if self.closestPt:
+            pnt.drawEllipse(self.closestPt.x - 2.5,
+                            self.closestPt.y - 2.5, 5, 5)
+
+        for route in M.routes:
+            route.paint(pnt)
 
 
-class RouteAddMode:
+class RouteAddMode(Mode):
     def __init__(self):
+        Mode.__init__(self)
+
         self.closestPt = None
 
     def activate(self):
@@ -176,21 +216,7 @@ class RouteAddMode:
             self.moveEvent()
 
     def moveEvent(self):
-        closestDistance = 99999999.9
-        closestPt = None
-        closestT = None
-        closestWall = None
-
-        for wall in M.walls.walls:
-            closest, t = closestPoint(wall.p1, wall.p2, M.mousePos)
-
-            dst = closest.distanceTo(M.mousePos)
-
-            if dst < closestDistance:
-                closestDistance = dst
-                closestPt = closest
-                closestT = t
-                closestWall = wall
+        closestPt, closestWall, closestT = getClosestPoint()
 
         if closestPt:
             self.closestPt = closestPt
@@ -218,7 +244,7 @@ class Point:
         self.y = float(y)
 
     def __str__(self):
-        return "%.3f,%.3f" % (self.x, self.y)
+        return "(%.3f,%.3f)" % (self.x, self.y)
 
     def __add__(self, pt):
         return Point(self.x + pt.x, self.y + pt.y)
@@ -262,10 +288,34 @@ def closestPoint(A, B, P):
 
     return (closest, t)
 
+# return (Point, Wall, t) tuple of closest point on the wall to mouse
+# cursor. t is same as second value returned from closestPoint().
+def getClosestPoint():
+    closestDistance = 99999999.9
+    closestPt = None
+    closestT = None
+    closestWall = None
+
+    for wall in M.walls.walls:
+        closest, t = closestPoint(wall.p1, wall.p2, M.mousePos)
+
+        dst = closest.distanceTo(M.mousePos)
+
+        if dst < closestDistance:
+            closestDistance = dst
+            closestPt = closest
+            closestT = t
+            closestWall = wall
+
+    return (closestPt, closestWall, closestT)
+
 class Wall:
     def __init__(self, p1, p2):
         self.p1 = p1
         self.p2 = p2
+
+    def __str__(self):
+        return "P1:%s P2:%s" % (self.p1, self.p2)
 
 class Walls:
     def __init__(self):
@@ -290,11 +340,15 @@ class Walls:
         self.pen = QtGui.QPen(QtCore.Qt.black)
         self.pen.setWidthF(2.0)
 
-    def paint(self, pnt):
+    def paint(self, pnt, drawEndPoints):
         pnt.setPen(self.pen)
 
         for wall in self.walls:
             pnt.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
+
+        if drawEndPoints:
+            for pt in self.points:
+                pnt.drawRect(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0)
 
 class Marker:
     SIZE = 18
@@ -329,7 +383,7 @@ class Marker:
         elif self.shape == Marker.CROSS:
             size /= 3.0
             pnt.drawRect(x, -size / 2, Marker.SIZE, size)
-            pnt.drawRect(x + Marker.SIZE / 2 - size / 2,
+            pnt.drawRect(x + Marker.SIZE / 2 - 	size / 2,
                          -Marker.SIZE / 2,
                          size, Marker.SIZE)
 
@@ -485,7 +539,7 @@ class CWall(QtGui.QWidget):
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
 
-        M.walls.paint(pnt)
+        M.walls.paint(pnt, M.mode.drawEndPoints)
 
         pen = QtGui.QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
