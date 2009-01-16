@@ -32,34 +32,179 @@ _currentColor = -1
 
 # misc globally needed stuff
 class Main:
-    # modes
-    WALL_MOVE, WALL_ADD, WALL_DELETE, ROUTE_ADD, ROUTE_EDIT = range(5)
-
-    modeNames = {
-        WALL_MOVE : "Move walls",
-        WALL_ADD : "Add walls",
-        WALL_DELETE : "Delete walls",
-        ROUTE_ADD : "Add routes",
-        ROUTE_EDIT : "Edit routes"
-        }
-
     def __init__(self):
+
+        self.modes = [
+            ("Move walls", WallMoveMode),
+            ("Add walls", WallAddMode),
+#             ("Delete walls", WallDeleteMode),
+            ("Add routes", RouteAddMode),
+#             ("Edit routes", RouteEditMode)
+            ]
+
+        # mode selection combobox
         self.modeCombo = None
 
         # main widget (CWall)
         self.w = None
 
-    def setMode(self, mode):
-        self.mode = mode
+        self.mousePos = Point(-1, -1)
+        self.mouseDown = False
+        self.route = Route()
+        self.routes = []
+        self.walls = Walls()
+
+        # mode class (WallMoveMode, ...)
+        self.modeClass = None
+
+        # mode class instance
+        self.mode = None
+
+    def setMode(self, modeClass):
+        if modeClass is self.modeClass:
+            return
+
+        #self.mode.deactivate()
+
+        self.modeClass = modeClass
+        self.mode = modeClass()
+        self.mode.activate()
+
+        self.w.update()
 
     def modeComboActivated(self):
-        mode = self.modeCombo.itemData(self.modeCombo.currentIndex()).toInt()[0]
-        if mode != self.mode:
-            print "changing mode to %s" % mode
-            self.mode = mode
+        self.setMode(self.modeCombo.itemData(
+                self.modeCombo.currentIndex()).toPyObject())
 
-M = Main()
-mypd = None
+# base class for modes
+class Mode:
+    # mode activated
+    def activate(self):
+        raise "abstract method called"
+
+    # mouse button press/release
+    def buttonEvent(self, isPress, x, y):
+        raise "abstract method called"
+
+    # mouse move event
+    def moveEvent(self, x, y):
+        raise "abstract method called"
+
+    # paint
+    def paint(self, pnt):
+        raise "abstract method called"
+
+class WallMoveMode:
+    def __init__(self):
+        # wall editing stuff
+
+        # closest wall end point
+        self.closestPt = None
+
+        self.updateClosestPoint()
+
+    def activate(self):
+        print "activating wall move mode"
+
+    def buttonEvent(self, isPress):
+        pass
+
+    def moveEvent(self):
+        self.updateClosestPoint()
+
+        if M.mouseDown and self.closestPt:
+            self.closestPt.x = M.mousePos.x
+            self.closestPt.y = M.mousePos.y
+
+            # TODO: optimize this, we only need to recalc the routes
+            # belonging to the two wall segments touching the modified
+            # point
+            for route in M.routes:
+                route.recalcPos()
+
+    def updateClosestPoint(self):
+        closestDistance = 99999999.9
+        closestPt = None
+
+        for pt in M.walls.points:
+            dst = pt.distanceTo(M.mousePos)
+
+            if dst < closestDistance:
+                closestDistance = dst
+                closestPt = pt
+
+        if closestPt:
+            self.closestPt = closestPt
+
+    def paint(self, pnt):
+        if self.closestPt:
+            pnt.drawEllipse(self.closestPt.x - 2.5,
+                            self.closestPt.y - 2.5, 5, 5)
+
+        for route in M.routes:
+            route.paint(pnt)
+
+
+class WallAddMode:
+    def __init__(self):
+        pass
+
+    def activate(self):
+        print "activating wall add mode"
+
+    def buttonEvent(self, isPress):
+        pass
+
+    def moveEvent(self):
+        pass
+
+    def paint(self, pnt):
+        pass
+
+
+class RouteAddMode:
+    def __init__(self):
+        self.closestPt = None
+
+    def activate(self):
+        print "activating route add mode"
+
+    def buttonEvent(self, isPress):
+        if isPress:
+            M.routes.append(M.route)
+            M.route = Route()
+            self.moveEvent()
+
+    def moveEvent(self):
+        closestDistance = 99999999.9
+        closestPt = None
+        closestT = None
+        closestWall = None
+
+        for wall in M.walls.walls:
+            closest, t = closestPoint(wall.p1, wall.p2, M.mousePos)
+
+            dst = closest.distanceTo(M.mousePos)
+
+            if dst < closestDistance:
+                closestDistance = dst
+                closestPt = closest
+                closestT = t
+                closestWall = wall
+
+        if closestPt:
+            self.closestPt = closestPt
+            M.route.attachTo(closestWall, closestT)
+
+    def paint(self, pnt):
+        if self.closestPt:
+            pnt.drawEllipse(self.closestPt.x - 2.5,
+                            self.closestPt.y - 2.5, 5, 5)
+
+        for route in M.routes:
+            route.paint(pnt)
+
+        M.route.paint(pnt)
 
 def getNextColor():
     global _currentColor
@@ -182,7 +327,6 @@ class Marker:
             size /= 3.0
             pnt.drawRect(x, -size / 2, Marker.SIZE, size)
         elif self.shape == Marker.CROSS:
-            # FIXME: implement
             size /= 3.0
             pnt.drawRect(x, -size / 2, Marker.SIZE, size)
             pnt.drawRect(x + Marker.SIZE / 2 - size / 2,
@@ -210,7 +354,7 @@ class Route:
         self.offset = 10
         self.flipSide = False
 
-    def attachTo(self, wall, closestPt, t):
+    def attachTo(self, wall, t):
         self.wall = wall
         self.t = t
 
@@ -284,29 +428,11 @@ class CWall(QtGui.QWidget):
         self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
 
-        self.mousePos = Point(-1, -1)
-        self.mouseDown = False
-        self.route = Route()
-        self.routes = []
-
-        self.walls = Walls()
-
-        self.wallEdit = True
-
-        # wall editing stuff
-
-        # closest wall point
-        self.closestWallPt = None
-
     def keyPressEvent(self, event):
         key = event.key()
 
         if key == QtCore.Qt.Key_F:
-            self.route.flipSide = not self.route.flipSide
-            self.update()
-        elif key == QtCore.Qt.Key_A:
-            self.routes.append(self.route)
-            self.route = Route()
+            M.route.flipSide = not M.route.flipSide
             self.update()
         elif key == QtCore.Qt.Key_S:
             global mypd
@@ -323,13 +449,6 @@ class CWall(QtGui.QWidget):
             pnt.end()
 
             print "saved PDF file"
-        elif key == QtCore.Qt.Key_W:
-            if not self.wallEdit:
-                self.wallEdit = True
-            else:
-                self.wallEdit = False
-
-            self.update()
 
         elif key == QtCore.Qt.Key_T:
             zz = util.TimerDev("50 paints")
@@ -337,29 +456,19 @@ class CWall(QtGui.QWidget):
             for i in xrange(50):
                 self.repaint()
 
-    def wallEditActivity(self):
-        if self.wallEdit and self.mouseDown and self.closestWallPt:
-            self.closestWallPt.x = self.mousePos.x
-            self.closestWallPt.y = self.mousePos.y
-
-        # TODO: optimize this, we only need to recalc the routes belonging
-        # to the two wall segments touching the modified point
-        for route in self.routes:
-            route.recalcPos()
-
     def mouseMoveEvent(self, event):
-        self.mousePos = Point(event.x(), event.y())
-        self.wallEditActivity()
+        M.mousePos = Point(event.x(), event.y())
+        M.mode.moveEvent()
         self.update()
 
     def mousePressEvent(self, event):
-        self.mouseDown = True
-        self.wallEditActivity()
+        M.mouseDown = True
+        M.mode.buttonEvent(True)
         self.update()
 
     def mouseReleaseEvent(self, event):
-        self.mouseDown = False
-        self.wallEditActivity()
+        M.mouseDown = False
+        M.mode.buttonEvent(False)
         self.update()
 
     def paintEvent(self, event):
@@ -376,66 +485,27 @@ class CWall(QtGui.QWidget):
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
 
-        self.walls.paint(pnt)
+        M.walls.paint(pnt)
 
         pen = QtGui.QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
-        pnt.drawEllipse(self.mousePos.x - 2.5, self.mousePos.y - 2.5, 5, 5)
+        pnt.drawEllipse(M.mousePos.x - 2.5, M.mousePos.y - 2.5, 5, 5)
 
         pen = QtGui.QPen(QtCore.Qt.blue)
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
-        if self.wallEdit:
-            closestDistance = 99999999.9
-            closestPt = None
-
-            for pt in self.walls.points:
-                dst = pt.distanceTo(self.mousePos)
-
-                if dst < closestDistance:
-                    closestDistance = dst
-                    closestPt = pt
-
-            if closestPt:
-                pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
-                self.closestWallPt = closestPt
-
-            # FIXME: debug stuff, remove
-            for route in self.routes:
-                route.paint(pnt)
-
-        else:
-            for route in self.routes:
-                route.paint(pnt)
-
-            closestDistance = 99999999.9
-            closestPt = None
-            closestT = None
-            closestWall = None
-
-            for wall in self.walls.walls:
-                closest, t = closestPoint(wall.p1, wall.p2, self.mousePos)
-
-                dst = closest.distanceTo(self.mousePos)
-
-                if dst < closestDistance:
-                    closestDistance = dst
-                    closestPt = closest
-                    closestT = t
-                    closestWall = wall
-
-            if closestPt:
-                #pnt.drawEllipse(closestPt.x - 2.5, closestPt.y - 2.5, 5, 5)
-
-                self.route.attachTo(closestWall, closestPt, closestT)
-                self.route.paint(pnt)
-
+        M.mode.paint(pnt)
 
 
 def main():
+    global M, mypd
+
+    M = Main()
+    mypd = None
+
     app = QtGui.QApplication(sys.argv)
 
     mw = QtGui.QMainWindow()
@@ -448,8 +518,8 @@ def main():
 
     M.modeCombo = QtGui.QComboBox(w)
 
-    for key, val in M.modeNames.iteritems():
-        M.modeCombo.addItem(val, QtCore.QVariant(key))
+    for name, mode in M.modes:
+        M.modeCombo.addItem(name, QtCore.QVariant(mode))
 
     M.modeCombo.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
 
@@ -476,7 +546,7 @@ def main():
 
     mw.setCentralWidget(w)
 
-    M.setMode(Main.WALL_MOVE)
+    M.setMode(WallMoveMode)
 
     mw.show()
 
