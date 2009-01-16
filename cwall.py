@@ -21,6 +21,8 @@ COLORS = [
     Color("Green", 0, 255, 0),
     Color("Red", 255, 0, 0),
     Color("Yellow", 255, 255, 0),
+    Color("Pink", 254, 36, 154),
+    Color("Orange", 255, 127, 0),
     Color("Brown", 150, 75, 0),
     Color("White", 255, 255, 255),
     Color("Black", 0, 0, 0)
