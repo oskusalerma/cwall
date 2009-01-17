@@ -6,6 +6,8 @@ import util
 import sys, random, math
 from PyQt4 import QtGui, QtCore
 
+SQRT_2 = math.sqrt(2)
+
 class Color:
     def __init__(self, name, r, g, b):
         self.name = name
@@ -438,7 +440,7 @@ class Walls:
 
         if drawEndPoints:
             for pt in self.points:
-                pnt.drawRect(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0)
+                pnt.drawRect(QtCore.QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
 
 class Marker:
     SIZE = 18
@@ -452,6 +454,9 @@ class Marker:
         self.pen = QtGui.QPen(QtCore.Qt.black)
         self.pen.setWidthF(1.0)
 
+        self.gridPen = QtGui.QPen(QtCore.Qt.green)
+        self.gridPen.setWidthF(0.2)
+
     def size(self):
         return Marker.SIZE
 
@@ -464,41 +469,68 @@ class Marker:
         pnt.setBrush(color.brush)
 
         size = Marker.SIZE
+        mSize = size
 
         if self.shape == Marker.BOX:
-            pnt.drawRect(x, -size / 2, Marker.SIZE, size)
+            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, size, size))
 
         elif self.shape == Marker.RECTANGLE:
             size /= 3.0
-            pnt.drawRect(x, -size / 2, Marker.SIZE, size)
+            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, mSize, size))
+
         elif self.shape == Marker.CROSS:
             size /= 3.0
-            pnt.drawRect(x, -size / 2, Marker.SIZE, size)
-            pnt.drawRect(x + Marker.SIZE / 2 - 	size / 2,
-                         -Marker.SIZE / 2,
-                         size, Marker.SIZE)
+            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, mSize, size))
+
+            pnt.drawRect(QtCore.QRectF(
+                    x + mSize / 2.0 - size / 2.0,
+                    -mSize / 2.0,
+                    size, mSize))
 
         elif self.shape == Marker.DIAMOND_TAIL:
-
-            # FIXME: the tail is a bit to the left, suspect pen size at
-            # small sizes is the culprit. NOTE: CROSS has same problem,
-            # not as noticeable.
-
             tailSize = size / 3.0
             dSize = size / 2.0
 
             # half of the diagonal of the diamond square
-            a = dSize / math.sqrt(2)
+            a = dSize / SQRT_2
 
-            pnt.drawRect(x + tailSize, -Marker.SIZE / 2 + a,
-                         tailSize, Marker.SIZE - a)
+            pnt.drawRect(QtCore.QRectF(x + tailSize, -size / 2.0 + a,
+                                       tailSize, size - a))
 
             pnt.save()
-            pnt.translate(x + Marker.SIZE / 2,
-                          -Marker.SIZE / 2 + a)
+            pnt.translate(x + size / 2.0,
+                          -size / 2.0 + a)
             pnt.rotate(-45)
-            pnt.drawRect(-dSize / 2, -dSize / 2, dSize, dSize)
+            pnt.drawRect(QtCore.QRectF(-dSize / 2.0, -dSize / 2.0,
+                                        dSize, dSize))
+
             pnt.restore()
+
+        #self.paintGrid(pnt, x, 0)
+
+    # when debugging paint problems, it's useful to have a grid painted on
+    # top of the marker to show boundaries and center lines.
+    def paintGrid(self, pnt, x, y):
+        size = Marker.SIZE
+
+        pnt.save()
+        pnt.setPen(self.gridPen)
+
+        # vertical
+        pnt.drawLine(QtCore.QLineF(x, y + -size / 2.0, x, y + size / 2.0))
+        pnt.drawLine(QtCore.QLineF(x + size / 2.0, y + -size / 2.0,
+                                   x + size / 2.0, y + size / 2.0))
+        pnt.drawLine(QtCore.QLineF(x + size, y + -size / 2.0, x + size,
+                                   y + size / 2.0))
+
+        # horizontal
+        pnt.drawLine(QtCore.QLineF(x, y + -size / 2.0, x + size,
+                                   y + -size / 2.0))
+        pnt.drawLine(QtCore.QLineF(x, y, x + size, y))
+        pnt.drawLine(QtCore.QLineF(x, y + size / 2.0, x + size,
+                                   y + size / 2.0))
+
+        pnt.restore()
 
 class Route:
     def __init__(self):
