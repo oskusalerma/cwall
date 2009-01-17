@@ -36,7 +36,7 @@ class Main:
 
         self.modes = [
             ("Move walls", WallMoveMode),
-            ("Add walls", WallAddMode),
+            ("Split walls", WallSplitMode),
 #             ("Delete walls", WallDeleteMode),
             ("Add routes", RouteAddMode),
 #             ("Edit routes", RouteEditMode)
@@ -112,7 +112,8 @@ class WallMoveMode(Mode):
         print "activating wall move mode"
 
     def buttonEvent(self, isPress):
-        pass
+        if isPress:
+            self.moveEvent()
 
     def moveEvent(self):
         self.updateClosestPoint()
@@ -150,34 +151,46 @@ class WallMoveMode(Mode):
             route.paint(pnt)
 
 
-class WallAddMode(Mode):
+class WallSplitMode(Mode):
     def __init__(self):
         Mode.__init__(self, True)
 
         self.closestPt = None
         self.closestWall = None
+        self.closestT = None
 
     def activate(self):
-        print "activating wall add mode"
+        print "activating wall split mode"
 
     def buttonEvent(self, isPress):
         if isPress and self.closestWall:
-            w = self.closestWall
+            wOld = self.closestWall
+            pt = Point(M.mousePos.x, M.mousePos.y)
 
-            pt = Point(self.closestPt.x, self.closestPt.y)
+            wNew = Wall(wOld.p1, pt)
+            wOld.p1 = pt
 
-            ptIdx = M.walls.points.index(w.p2)
+            tNew = 1.0 / self.closestT
+            tOld = 1.0 / (1.0 - self.closestT)
+
+            for route in wOld.getRoutes():
+                if route.t < self.closestT:
+                    newT = route.t * tNew
+                    route.attachTo(wNew, newT)
+                else:
+                    newT = (route.t - self.closestT) * tOld
+                    route.attachTo(wOld, newT)
+
+            ptIdx = M.walls.points.index(wOld.p2)
             M.walls.points.insert(ptIdx, pt)
 
-            wallIdx = M.walls.walls.index(w)
-
-            # FIXME: divide routes belonging to w among w/wNew, and adjust
-            # their t parameters
-
-            wNew = Wall(w.p1, pt)
-            w.p1 = pt
+            wallIdx = M.walls.walls.index(wOld)
 
             M.walls.walls.insert(wallIdx, wNew)
+
+            self.closestPt = None
+            self.closestWall = None
+            self.closestT = None
 
     def moveEvent(self):
         closestPt, closestWall, closestT = getClosestPoint()
@@ -188,6 +201,8 @@ class WallAddMode(Mode):
         # one can't split a wall at its end points
         if closestT not in (1.0, 0.0):
             self.closestWall = closestWall
+            self.closestT = closestT
+
         else:
             self.closestWall = None
 
@@ -314,6 +329,12 @@ class Wall:
         self.p1 = p1
         self.p2 = p2
 
+        self.routes = []
+
+    # return a copy of the wall's routes
+    def getRoutes(self):
+        return list(self.routes)
+
     def __str__(self):
         return "P1:%s P2:%s" % (self.p1, self.p2)
 
@@ -389,7 +410,7 @@ class Marker:
 
 class Route:
     def __init__(self):
-        self.level = "5.10a"
+        self.level = "5.11a"
         self.color = getNextColor()
         self.marker = Marker()
 
@@ -409,7 +430,11 @@ class Route:
         self.flipSide = False
 
     def attachTo(self, wall, t):
+        if self.wall:
+            self.wall.routes.remove(self)
+
         self.wall = wall
+        self.wall.routes.append(self)
         self.t = t
 
         self.recalcPos()
@@ -601,6 +626,26 @@ def main():
     mw.setCentralWidget(w)
 
     M.setMode(WallMoveMode)
+
+
+    # FIXME: remove
+    M.route.attachTo(M.walls.walls[0], 0.1)
+    M.routes.append(M.route)
+    M.route = Route()
+
+    M.route.attachTo(M.walls.walls[0], 0.3)
+    M.routes.append(M.route)
+    M.route = Route()
+
+    M.route.attachTo(M.walls.walls[0], 0.5)
+    M.routes.append(M.route)
+    M.route = Route()
+
+    M.route.attachTo(M.walls.walls[0], 0.8)
+    M.routes.append(M.route)
+    M.route = Route()
+
+
 
     mw.show()
 
