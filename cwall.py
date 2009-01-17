@@ -101,12 +101,8 @@ class WallMoveMode(Mode):
     def __init__(self):
         Mode.__init__(self, True)
 
-        # wall editing stuff
-
         # closest wall end point
-        self.closestPt = None
-
-        self.updateClosestPoint()
+        self.closestPt = getClosestEndPoint()
 
     def activate(self):
         print "activating wall move mode"
@@ -116,7 +112,7 @@ class WallMoveMode(Mode):
             self.moveEvent()
 
     def moveEvent(self):
-        self.updateClosestPoint()
+        self.closestPt = getClosestEndPoint()
 
         if M.mouseDown and self.closestPt:
             self.closestPt.x = M.mousePos.x
@@ -127,20 +123,6 @@ class WallMoveMode(Mode):
             # point
             for route in M.routes:
                 route.recalcPos()
-
-    def updateClosestPoint(self):
-        closestDistance = 99999999.9
-        closestPt = None
-
-        for pt in M.walls.points:
-            dst = pt.distanceTo(M.mousePos)
-
-            if dst < closestDistance:
-                closestDistance = dst
-                closestPt = pt
-
-        if closestPt:
-            self.closestPt = closestPt
 
     def paint(self, pnt):
         if self.closestPt:
@@ -323,6 +305,22 @@ def getClosestPoint():
             closestWall = wall
 
     return (closestPt, closestWall, closestT)
+
+# return closest wall end point to mouse cursor, or None if it does not
+# exist
+def getClosestEndPoint():
+    closestDistance = 99999999.9
+    closestPt = None
+
+    for pt in M.walls.points:
+        dst = pt.distanceTo(M.mousePos)
+
+        if dst < closestDistance:
+            closestDistance = dst
+            closestPt = pt
+
+    if closestPt:
+        return closestPt
 
 class Wall:
     def __init__(self, p1, p2):
