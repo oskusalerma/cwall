@@ -444,10 +444,10 @@ class Marker:
     SIZE = 18
 
     # marker shapes
-    BOX, RECTANGLE, CROSS = range(3)
+    BOX, RECTANGLE, CROSS, DIAMOND_TAIL = range(4)
 
     def __init__(self):
-        self.shape = random.randint(0, Marker.CROSS)
+        self.shape = random.randint(0, Marker.DIAMOND_TAIL)
 
         self.pen = QtGui.QPen(QtCore.Qt.black)
         self.pen.setWidthF(1.0)
@@ -455,12 +455,13 @@ class Marker:
     def size(self):
         return Marker.SIZE
 
+    # marker should fit in a rectangle whose dimensions are Marker.SIZE.
+    # in this paint function, the coordinate system is set up as follows:
+    #  x = left side of rectangle
+    #  y (implicitly 0) = center of rectangle
     def paint(self, pnt, color, x):
         pnt.setPen(self.pen)
         pnt.setBrush(color.brush)
-
-        #pnt.drawLine(x, -Marker.SIZE / 2.0, x, Marker.SIZE / 2.0)
-        #pnt.drawLine(x, 0, x, Marker.SIZE)
 
         size = Marker.SIZE
 
@@ -477,9 +478,31 @@ class Marker:
                          -Marker.SIZE / 2,
                          size, Marker.SIZE)
 
+        elif self.shape == Marker.DIAMOND_TAIL:
+
+            # FIXME: the tail is a bit to the left, suspect pen size at
+            # small sizes is the culprit. NOTE: CROSS has same problem,
+            # not as noticeable.
+
+            tailSize = size / 3.0
+            dSize = size / 2.0
+
+            # half of the diagonal of the diamond square
+            a = dSize / math.sqrt(2)
+
+            pnt.drawRect(x + tailSize, -Marker.SIZE / 2 + a,
+                         tailSize, Marker.SIZE - a)
+
+            pnt.save()
+            pnt.translate(x + Marker.SIZE / 2,
+                          -Marker.SIZE / 2 + a)
+            pnt.rotate(-45)
+            pnt.drawRect(-dSize / 2, -dSize / 2, dSize, dSize)
+            pnt.restore()
+
 class Route:
     def __init__(self):
-        self.level = "5.11a"
+        self.level = "5.15a"
         self.color = getNextColor()
         self.marker = Marker()
 
@@ -551,7 +574,7 @@ class Route:
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
 
         if self.flipSide:
-            x = -textRect.width() - self.offset * 1.5- self.marker.size()
+            x = -textRect.width() - self.offset * 1.5 - self.marker.size()
         else:
             x = self.offset
 
