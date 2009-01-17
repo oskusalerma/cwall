@@ -37,7 +37,7 @@ class Main:
         self.modes = [
             ("Move walls", WallMoveMode),
             ("Split walls", WallSplitMode),
-#             ("Delete walls", WallDeleteMode),
+            ("Combine walls", WallCombineMode),
             ("Add routes", RouteAddMode),
 #             ("Edit routes", RouteEditMode)
             ]
@@ -123,6 +123,60 @@ class WallMoveMode(Mode):
             # point
             for route in M.routes:
                 route.recalcPos()
+
+    def paint(self, pnt):
+        if self.closestPt:
+            pnt.drawEllipse(self.closestPt.x - 2.5,
+                            self.closestPt.y - 2.5, 5, 5)
+
+        for route in M.routes:
+            route.paint(pnt)
+
+
+class WallCombineMode(Mode):
+    def __init__(self):
+        Mode.__init__(self, True)
+
+        # closest wall end point
+        self.closestPt = getClosestEndPoint()
+
+    def activate(self):
+        print "activating wall combine mode"
+
+    def buttonEvent(self, isPress):
+        if isPress and self.closestPt:
+            pt = self.closestPt
+            w1, w2 = pt.getWalls()
+
+            print w1, w2
+
+            # can't delete start or end points (for now, anyway)
+            if not w1 or not w2:
+                return
+
+            l1 = w1.p1.distanceTo(w1.p2)
+            l2 = w2.p1.distanceTo(w2.p2)
+            totalLen = l1 + l2
+            r1 = l1 / totalLen
+            r2 = l2 / totalLen
+
+            w1.p2 = w2.p2
+
+            for route in w1.getRoutes():
+                newT = route.t * r1
+                route.attachTo(w1, newT)
+
+            for route in w2.getRoutes():
+                newT = route.t * r2 + r1
+                route.attachTo(w1, newT)
+
+            M.walls.points.remove(pt)
+            M.walls.walls.remove(w2)
+
+            self.closestPt = getClosestEndPoint()
+
+    def moveEvent(self):
+        self.closestPt = getClosestEndPoint()
 
     def paint(self, pnt):
         if self.closestPt:
@@ -258,6 +312,23 @@ class Point:
     # returns distance to another point
     def distanceTo(self, pt):
         return math.sqrt((self.x - pt.x)**2 + (self.y - pt.y)**2)
+
+    # return walls around this point as a (Wall, Wall) tuple. if point is
+    # start/end point, either one may be None.
+    def getWalls(self):
+        w1 = None
+        w2 = None
+
+        for wall in M.walls.walls:
+            if wall.p2 is self:
+                w1 = wall
+            elif wall.p1 is self:
+                w2 = wall
+
+            if w2:
+                break
+
+        return (w1, w2)
 
 # return Point on line segment (A, B) that's closest to P as first element
 # of tuple, and a value between [0,1] as a second element that tells how
@@ -624,26 +695,6 @@ def main():
     mw.setCentralWidget(w)
 
     M.setMode(WallMoveMode)
-
-
-    # FIXME: remove
-    M.route.attachTo(M.walls.walls[0], 0.1)
-    M.routes.append(M.route)
-    M.route = Route()
-
-    M.route.attachTo(M.walls.walls[0], 0.3)
-    M.routes.append(M.route)
-    M.route = Route()
-
-    M.route.attachTo(M.walls.walls[0], 0.5)
-    M.routes.append(M.route)
-    M.route = Route()
-
-    M.route.attachTo(M.walls.walls[0], 0.8)
-    M.routes.append(M.route)
-    M.route = Route()
-
-
 
     mw.show()
 
