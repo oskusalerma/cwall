@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # coding: Latin-1
 
+import lxml.etree as etree
 import util
 
 import sys, random, math
@@ -50,6 +51,9 @@ class Main:
         # main widget (CWall)
         self.w = None
 
+        # main window
+        self.mw = None
+
         self.mousePos = Point(-1, -1)
         self.mouseDown = False
         self.route = Route()
@@ -77,6 +81,15 @@ class Main:
     def modeComboActivated(self):
         self.setMode(self.modeCombo.itemData(
                 self.modeCombo.currentIndex()).toPyObject())
+
+    def saveWalls(self):
+        el = etree.Element("ClimbingWalls")
+        el.set("version", "1")
+        el.append(self.walls.toXml(el))
+        data = etree.tostring(el, xml_declaration = True,
+                              encoding = "UTF-8", pretty_print = True)
+
+        util.writeToFile("walls.xml", data, self.mw)
 
 # base class for modes
 class Mode:
@@ -332,6 +345,14 @@ class Point:
 
         return (w1, w2)
 
+    def toXml(self):
+        el = etree.Element("Point")
+
+        el.set("x", util.float2str(self.x))
+        el.set("y", util.float2str(self.y))
+
+        return el
+
 # return Point on line segment (A, B) that's closest to P as first element
 # of tuple, and a value between [0,1] as a second element that tells how
 # far along the line segment from A to B the closest point is.
@@ -399,15 +420,24 @@ class Wall:
     def __init__(self, p1, p2):
         self.p1 = p1
         self.p2 = p2
+        self.id = util.UUID()
 
         self.routes = []
+
+    def __str__(self):
+        return "P1:%s P2:%s id:%s" % (self.p1, self.p2, self.id)
 
     # return a copy of the wall's routes
     def getRoutes(self):
         return list(self.routes)
 
-    def __str__(self):
-        return "P1:%s P2:%s" % (self.p1, self.p2)
+    def toXml(self):
+        el = etree.Element("Wall")
+
+        el.set("id", self.id)
+
+        return el
+
 
 class Walls:
     def __init__(self):
@@ -441,6 +471,18 @@ class Walls:
         if drawEndPoints:
             for pt in self.points:
                 pnt.drawRect(QtCore.QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
+
+    def toXml(self, el):
+        pointEl = etree.SubElement(el, "Points")
+        wallEl = etree.SubElement(el, "Walls")
+
+        for p in self.points:
+            pointEl.append(p.toXml())
+
+        for w in self.walls:
+            wallEl.append(w.toXml())
+
+        return el
 
 class Marker:
     SIZE = 18
@@ -659,6 +701,9 @@ class CWall(QtGui.QWidget):
             for i in xrange(50):
                 self.repaint()
 
+        else:
+            QtGui.QWidget.keyPressEvent(self, event)
+
     def mouseMoveEvent(self, event):
         M.mousePos = Point(event.x(), event.y())
         M.mode.moveEvent()
@@ -714,6 +759,11 @@ def main():
     mw = QtGui.QMainWindow()
     mw.setGeometry(400, 50, 850, 700)
     mw.setWindowTitle("Climbing walls")
+    M.mw = mw
+
+    mb = mw.menuBar()
+    fmenu = mb.addMenu("&File")
+    fmenu.addAction("Save walls", M.saveWalls, QtGui.QKeySequence.Save)
 
     w = QtGui.QWidget()
     vbox = QtGui.QVBoxLayout(w)
@@ -752,6 +802,7 @@ def main():
     M.setMode(WallMoveMode)
 
     mw.show()
+    M.w.setFocus()
 
     app.exec_()
 
