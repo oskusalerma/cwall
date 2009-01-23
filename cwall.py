@@ -54,11 +54,19 @@ class Main:
         # main window
         self.mw = None
 
+        # physical mouse pos in window system pixel coordinates
+        self.physicalMousePos = Point(-1, -1)
+
+        # logical mouse pos in translated / scaled coordinates
         self.mousePos = Point(-1, -1)
+
         self.mouseDown = False
         self.route = Route()
         self.routes = []
         self.walls = Walls()
+
+        self.viewportOffset = Point(0.0, 0.0)
+        self.viewportScale = 1.0
 
         # mode class (WallMoveMode, ...)
         self.modeClass = None
@@ -81,6 +89,18 @@ class Main:
     def modeComboActivated(self):
         self.setMode(self.modeCombo.itemData(
                 self.modeCombo.currentIndex()).toPyObject())
+
+    # calculate logical mouse pos from physical mouse pos
+    def calcMousePos(self):
+        x, y = self.physicalMousePos.x, self.physicalMousePos.y
+
+        x -= self.viewportOffset.x
+        y -= self.viewportOffset.y
+
+        x /= self.viewportScale
+        y /= self.viewportScale
+
+        self.mousePos = Point(x, y)
 
     def saveWalls(self):
         el = etree.Element("ClimbingWalls")
@@ -670,7 +690,7 @@ class CWall(QtGui.QWidget):
 
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
         self.setMouseTracking(True)
-        self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
+        #self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
 
     def keyPressEvent(self, event):
@@ -701,12 +721,53 @@ class CWall(QtGui.QWidget):
             for i in xrange(50):
                 self.repaint()
 
+        elif key == QtCore.Qt.Key_Up:
+            M.viewportOffset.y += 10.0
+            M.calcMousePos()
+            M.mode.moveEvent()
+            self.update()
+
+        elif key == QtCore.Qt.Key_Down:
+            M.viewportOffset.y -= 10.0
+            M.calcMousePos()
+            M.mode.moveEvent()
+            self.update()
+
+        elif key == QtCore.Qt.Key_Left:
+            M.viewportOffset.x += 10.0
+            M.calcMousePos()
+            M.mode.moveEvent()
+            self.update()
+
+        elif key == QtCore.Qt.Key_Right:
+            M.viewportOffset.x -= 10.0
+            M.calcMousePos()
+            M.mode.moveEvent()
+            self.update()
+
+        # FIXME: scale up/down need to adjust viewportOffset to keep
+        # center position of viewport unchanged
+
+        elif key == QtCore.Qt.Key_Plus:
+            M.viewportScale *= 1.1
+            M.calcMousePos()
+            self.update()
+
+        elif key == QtCore.Qt.Key_Minus:
+            # FIXME: need some minimum limit for scale
+            M.viewportScale *= 0.9
+            M.calcMousePos()
+            M.mode.moveEvent()
+            self.update()
+
         else:
             QtGui.QWidget.keyPressEvent(self, event)
 
     def mouseMoveEvent(self, event):
-        M.mousePos = Point(event.x(), event.y())
+        M.physicalMousePos = Point(event.x(), event.y())
+        M.calcMousePos()
         M.mode.moveEvent()
+
         self.update()
 
     def mousePressEvent(self, event):
@@ -729,6 +790,12 @@ class CWall(QtGui.QWidget):
 
     def paint(self, pnt):
         #size = self.size()
+
+        voffs = M.viewportOffset
+        pnt.translate(voffs.x, voffs.y)
+
+        #print "scale: %f" % M.viewportScale
+        pnt.scale(M.viewportScale, M.viewportScale)
 
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
