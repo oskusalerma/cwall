@@ -54,6 +54,9 @@ class Main:
         # main window
         self.mw = None
 
+        self.clear()
+
+    def clear(self):
         # physical mouse pos in window system pixel coordinates
         self.physicalMousePos = Point(-1, -1)
 
@@ -62,8 +65,6 @@ class Main:
 
         self.mouseDown = False
         self.route = Route()
-        self.routes = []
-        self.walls = Walls()
 
         self.viewportOffset = Point(0.0, 0.0)
         self.viewportScale = 1.0
@@ -73,6 +74,9 @@ class Main:
 
         # mode class instance
         self.mode = None
+
+    def saveCW(self):
+        CW.save()
 
     def setMode(self, modeClass):
         if modeClass is self.modeClass:
@@ -101,15 +105,6 @@ class Main:
         y /= self.viewportScale
 
         self.mousePos = Point(x, y)
-
-    def saveWalls(self):
-        el = etree.Element("ClimbingWalls")
-        el.set("version", "1")
-        el.append(self.walls.toXml(el))
-        data = etree.tostring(el, xml_declaration = True,
-                              encoding = "UTF-8", pretty_print = True)
-
-        util.writeToFile("walls.xml", data, self.mw)
 
 # base class for modes
 class Mode:
@@ -158,7 +153,7 @@ class WallMoveMode(Mode):
             # TODO: optimize this, we only need to recalc the routes
             # belonging to the two wall segments touching the modified
             # point
-            for route in M.routes:
+            for route in CW.routes:
                 route.recalcPos()
 
     def paint(self, pnt):
@@ -166,7 +161,7 @@ class WallMoveMode(Mode):
             pnt.drawEllipse(self.closestPt.x - 2.5,
                             self.closestPt.y - 2.5, 5, 5)
 
-        for route in M.routes:
+        for route in CW.routes:
             route.paint(pnt)
 
 
@@ -207,8 +202,8 @@ class WallCombineMode(Mode):
                 newT = route.t * r2 + r1
                 route.attachTo(w1, newT)
 
-            M.walls.points.remove(pt)
-            M.walls.walls.remove(w2)
+            CW.walls.points.remove(pt)
+            CW.walls.walls.remove(w2)
 
             self.closestPt = getClosestEndPoint()
 
@@ -220,7 +215,7 @@ class WallCombineMode(Mode):
             pnt.drawEllipse(self.closestPt.x - 2.5,
                             self.closestPt.y - 2.5, 5, 5)
 
-        for route in M.routes:
+        for route in CW.routes:
             route.paint(pnt)
 
 
@@ -254,12 +249,12 @@ class WallSplitMode(Mode):
                     newT = (route.t - self.closestT) * tOld
                     route.attachTo(wOld, newT)
 
-            ptIdx = M.walls.points.index(wOld.p2)
-            M.walls.points.insert(ptIdx, pt)
+            ptIdx = CW.walls.points.index(wOld.p2)
+            CW.walls.points.insert(ptIdx, pt)
 
-            wallIdx = M.walls.walls.index(wOld)
+            wallIdx = CW.walls.walls.index(wOld)
 
-            M.walls.walls.insert(wallIdx, wNew)
+            CW.walls.walls.insert(wallIdx, wNew)
 
             self.closestPt = None
             self.closestWall = None
@@ -284,7 +279,7 @@ class WallSplitMode(Mode):
             pnt.drawEllipse(self.closestPt.x - 2.5,
                             self.closestPt.y - 2.5, 5, 5)
 
-        for route in M.routes:
+        for route in CW.routes:
             route.paint(pnt)
 
 
@@ -299,7 +294,7 @@ class RouteAddMode(Mode):
 
     def buttonEvent(self, isPress):
         if isPress:
-            M.routes.append(M.route)
+            CW.routes.append(M.route)
             M.route = Route()
             self.moveEvent()
 
@@ -315,10 +310,29 @@ class RouteAddMode(Mode):
             pnt.drawEllipse(self.closestPt.x - 2.5,
                             self.closestPt.y - 2.5, 5, 5)
 
-        for route in M.routes:
+        for route in CW.routes:
             route.paint(pnt)
 
         M.route.paint(pnt)
+
+# a single continuous climbing wall, consisting of wall segments and
+# routes positioned on those segments
+class ClimbingWall:
+    def __init__(self):
+        self.routes = []
+        self.walls = Walls()
+        self.id = util.UUID()
+
+    def save(self):
+        el = etree.Element("ClimbingWall")
+        el.set("version", "1")
+        el.set("id", self.id)
+        el.append(self.walls.toXml(el))
+
+        data = etree.tostring(el, xml_declaration = True,
+                              encoding = "UTF-8", pretty_print = True)
+
+        util.writeToFile("pump2.xml", data, M.mw)
 
 def getNextColor():
     global _currentColor
@@ -356,7 +370,7 @@ class Point:
         w1 = None
         w2 = None
 
-        for wall in M.walls.walls:
+        for wall in CW.walls.walls:
             if wall.p2 is self:
                 w1 = wall
             elif wall.p1 is self:
@@ -409,7 +423,7 @@ def getClosestPoint():
     closestT = None
     closestWall = None
 
-    for wall in M.walls.walls:
+    for wall in CW.walls.walls:
         closest, t = closestPoint(wall.p1, wall.p2, M.mousePos)
 
         dst = closest.distanceTo(M.mousePos)
@@ -428,7 +442,7 @@ def getClosestEndPoint():
     closestDistance = 99999999.9
     closestPt = None
 
-    for pt in M.walls.points:
+    for pt in CW.walls.points:
         dst = pt.distanceTo(M.mousePos)
 
         if dst < closestDistance:
@@ -803,7 +817,7 @@ class MyWidget(QtGui.QWidget):
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
 
-        M.walls.paint(pnt, M.mode.drawEndPoints)
+        CW.walls.paint(pnt, M.mode.drawEndPoints)
 
         pen = QtGui.QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
@@ -819,9 +833,11 @@ class MyWidget(QtGui.QWidget):
 
 
 def main():
-    global M, mypd
+    global M, CW, mypd
 
     M = Main()
+    CW = ClimbingWall()
+
     mypd = None
 
     app = QtGui.QApplication(sys.argv)
@@ -833,7 +849,7 @@ def main():
 
     mb = mw.menuBar()
     fmenu = mb.addMenu("&File")
-    fmenu.addAction("Save walls", M.saveWalls, QtGui.QKeySequence.Save)
+    fmenu.addAction("Save climbing wall", M.saveCW, QtGui.QKeySequence.Save)
 
     w = QtGui.QWidget()
     vbox = QtGui.QVBoxLayout(w)
