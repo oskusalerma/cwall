@@ -48,7 +48,7 @@ class Main:
         # mode selection combobox
         self.modeCombo = None
 
-        # main widget (CWall)
+        # main widget (MyWidget)
         self.w = None
 
         # main window
@@ -147,7 +147,9 @@ class WallMoveMode(Mode):
             self.moveEvent()
 
     def moveEvent(self):
-        self.closestPt = getClosestEndPoint()
+        # if we're already moving a point, don't switch to another point
+        if not M.mouseDown:
+            self.closestPt = getClosestEndPoint()
 
         if M.mouseDown and self.closestPt:
             self.closestPt.x = M.mousePos.x
@@ -684,13 +686,13 @@ class Route:
         self.marker.paint(pnt, self.color, x)
         pnt.restore()
 
-class CWall(QtGui.QWidget):
+class MyWidget(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
 
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
         self.setMouseTracking(True)
-        #self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
+        self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
         #self.setAttribute(QtCore.Qt.WA_OpaquePaintEvent)
 
     def keyPressEvent(self, event):
@@ -751,6 +753,7 @@ class CWall(QtGui.QWidget):
         elif key == QtCore.Qt.Key_Plus:
             M.viewportScale *= 1.1
             M.calcMousePos()
+            M.mode.moveEvent()
             self.update()
 
         elif key == QtCore.Qt.Key_Minus:
@@ -857,7 +860,7 @@ def main():
     sep.setFrameStyle(QtGui.QFrame.HLine)
     vbox.addWidget(sep)
 
-    M.w = CWall(w)
+    M.w = MyWidget(w)
 
     vbox.addWidget(M.w, 1)
 
