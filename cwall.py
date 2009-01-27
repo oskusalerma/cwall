@@ -29,6 +29,17 @@ class Color:
 
         self.brush = QtGui.QBrush(QtGui.QColor(r, g, b))
 
+    def save(self):
+        return self.name
+
+    @staticmethod
+    def load(s):
+        for c in COLORS:
+            if c.name == s:
+                return c
+
+        util.cfgAssert(0, "Unknown color '%s'" % s)
+
 COLORS = [
     Color("Blue", 0, 0, 255),
     Color("Light blue", 128, 128, 255),
@@ -376,6 +387,11 @@ class ClimbingWall:
         el.set("id", self.id)
         self.walls.save(el)
 
+        routesEl = etree.SubElement(el, "Routes")
+
+        for route in self.routes:
+            routesEl.append(route.toXml())
+
         data = etree.tostring(el, xml_declaration = True,
                               encoding = "UTF-8", pretty_print = True)
 
@@ -398,6 +414,9 @@ class ClimbingWall:
             cw.id = util.getUUIDAttr(root, "id")
 
             cw.walls = Walls.load(root)
+
+            for el in root.xpath("Routes/Route"):
+                cw.routes.append(Route.load(el, cw))
 
             return cw
 
@@ -604,6 +623,14 @@ class Walls:
 
         return w
 
+    # lookup wall segment by id. returns None if not found.
+    def getWallById(self, wallId):
+        for w in self.walls:
+            if w.id == wallId:
+                return w
+
+        return None
+
     def paint(self, pnt, drawEndPoints):
         pnt.setPen(self.pen)
 
@@ -643,10 +670,13 @@ class Marker:
     SIZE = 18
 
     # marker shapes
-    BOX, RECTANGLE, CROSS, DIAMOND_TAIL = range(4)
+    SQUARE, RECTANGLE, CROSS, DIAMOND_TAIL = range(4)
 
-    def __init__(self):
-        self.shape = random.randint(0, Marker.DIAMOND_TAIL)
+    # shape names
+    shapeNames = ["Square", "Rectangle", "Cross", "DiamondTail"]
+
+    def __init__(self, shape):
+        self.shape = shape
 
         self.pen = QPen(QtCore.Qt.black)
         self.pen.setWidthF(1.0)
@@ -656,6 +686,17 @@ class Marker:
 
     def size(self):
         return Marker.SIZE
+
+    def save(self):
+        return Marker.shapeNames[self.shape]
+
+    @staticmethod
+    def load(s):
+        for shape, shapeName in enumerate(Marker.shapeNames):
+            if shapeName == s:
+                return Marker(shape)
+
+        util.cfgAssert(0, "Unknown marker shape '%s'" % s)
 
     # marker should fit in a rectangle whose dimensions are Marker.SIZE.
     # in this paint function, the coordinate system is set up as follows:
@@ -668,7 +709,7 @@ class Marker:
         size = Marker.SIZE
         mSize = size
 
-        if self.shape == Marker.BOX:
+        if self.shape == Marker.SQUARE:
             pnt.drawRect(QRectF(x, -size / 2.0, size, size))
 
         elif self.shape == Marker.RECTANGLE:
@@ -731,9 +772,10 @@ class Marker:
 
 class Route:
     def __init__(self):
-        self.level = "5.15a"
+        self.id = util.UUID()
+        self.rating = "5.15a"
         self.color = getNextColor()
-        self.marker = Marker()
+        self.marker = Marker(Marker.SQUARE)
 
         self.x = 0
         self.y = 0
@@ -782,6 +824,36 @@ class Route:
 
         self.angle = 90 - self.angle
 
+    def toXml(self):
+        el = etree.Element("Route")
+
+        el.set("id", self.id)
+        el.set("wallId", self.wall.id)
+        el.set("t", util.float2str(self.t))
+        el.set("color", self.color.save())
+        el.set("marker", self.marker.save())
+        el.set("rating", self.rating)
+
+        return el
+
+    @staticmethod
+    def load(el, cw):
+        r = Route()
+
+        r.id = util.getUUIDAttr(el, "id")
+        r.color = Color.load(util.getAttr(el, "color"))
+        r.marker = Marker.load(util.getAttr(el, "marker"))
+        r.rating = util.getAttr(el, "rating")
+
+        wallId = util.getUUIDAttr(el, "wallId")
+        wall = cw.walls.getWallById(wallId)
+
+        util.cfgAssert(wall, "Route attached to unknown wall '%s'" % wallId)
+
+        r.attachTo(wall, t = util.getFloatAttr(el, "t"))
+
+        return r
+
     def paint(self, pnt):
         pnt.save()
 
@@ -799,7 +871,7 @@ class Route:
 
         #pnt.drawLine(QLineF(0, 0, self.offset, 0))
 
-        s = "%s %s" % (self.level, self.color.name)
+        s = "%s %s" % (self.rating, self.color.name)
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
 
         if self.flipSide:
