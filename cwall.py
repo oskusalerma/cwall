@@ -374,7 +374,7 @@ class ClimbingWall:
         el = etree.Element("ClimbingWall")
         el.set("version", str(self.__class__.VERSION))
         el.set("id", self.id)
-        el.append(self.walls.toXml(el))
+        self.walls.save(el)
 
         data = etree.tostring(el, xml_declaration = True,
                               encoding = "UTF-8", pretty_print = True)
@@ -614,7 +614,7 @@ class Walls:
             for pt in self.points:
                 pnt.drawRect(QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
 
-    def toXml(self, el):
+    def save(self, el):
         pointEl = etree.SubElement(el, "Points")
         wallEl = etree.SubElement(el, "Walls")
 
@@ -623,8 +623,6 @@ class Walls:
 
         for w in self.walls:
             wallEl.append(w.toXml())
-
-        return el
 
     @staticmethod
     def load(root):
