@@ -9,6 +9,10 @@ import sys, random, math
 import lxml.etree as etree
 from PyQt4 import QtGui, QtCore
 
+QRectF = QtCore.QRectF
+QLineF = QtCore.QLineF
+QPen = QtGui.QPen
+
 SQRT_2 = math.sqrt(2)
 
 class Color:
@@ -563,7 +567,7 @@ class Walls:
         self.points = []
         self.walls = []
 
-        self.pen = QtGui.QPen(QtCore.Qt.black)
+        self.pen = QPen(QtCore.Qt.black)
         self.pen.setWidthF(2.0)
 
     # return initial object suitable for use if nothing else is loaded on
@@ -600,7 +604,7 @@ class Walls:
 
         if drawEndPoints:
             for pt in self.points:
-                pnt.drawRect(QtCore.QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
+                pnt.drawRect(QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
 
     def toXml(self, el):
         pointEl = etree.SubElement(el, "Points")
@@ -638,10 +642,10 @@ class Marker:
     def __init__(self):
         self.shape = random.randint(0, Marker.DIAMOND_TAIL)
 
-        self.pen = QtGui.QPen(QtCore.Qt.black)
+        self.pen = QPen(QtCore.Qt.black)
         self.pen.setWidthF(1.0)
 
-        self.gridPen = QtGui.QPen(QtCore.Qt.green)
+        self.gridPen = QPen(QtCore.Qt.green)
         self.gridPen.setWidthF(0.2)
 
     def size(self):
@@ -659,17 +663,17 @@ class Marker:
         mSize = size
 
         if self.shape == Marker.BOX:
-            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, size, size))
+            pnt.drawRect(QRectF(x, -size / 2.0, size, size))
 
         elif self.shape == Marker.RECTANGLE:
             size /= 3.0
-            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, mSize, size))
+            pnt.drawRect(QRectF(x, -size / 2.0, mSize, size))
 
         elif self.shape == Marker.CROSS:
             size /= 3.0
-            pnt.drawRect(QtCore.QRectF(x, -size / 2.0, mSize, size))
+            pnt.drawRect(QRectF(x, -size / 2.0, mSize, size))
 
-            pnt.drawRect(QtCore.QRectF(
+            pnt.drawRect(QRectF(
                     x + mSize / 2.0 - size / 2.0,
                     -mSize / 2.0,
                     size, mSize))
@@ -681,15 +685,15 @@ class Marker:
             # half of the diagonal of the diamond square
             a = dSize / SQRT_2
 
-            pnt.drawRect(QtCore.QRectF(x + tailSize, -size / 2.0 + a,
-                                       tailSize, size - a))
+            pnt.drawRect(QRectF(x + tailSize, -size / 2.0 + a,
+                                tailSize, size - a))
 
             pnt.save()
             pnt.translate(x + size / 2.0,
                           -size / 2.0 + a)
             pnt.rotate(-45)
-            pnt.drawRect(QtCore.QRectF(-dSize / 2.0, -dSize / 2.0,
-                                        dSize, dSize))
+            pnt.drawRect(QRectF(-dSize / 2.0, -dSize / 2.0,
+                                 dSize, dSize))
 
             pnt.restore()
 
@@ -704,18 +708,18 @@ class Marker:
         pnt.setPen(self.gridPen)
 
         # vertical
-        pnt.drawLine(QtCore.QLineF(x, y + -size / 2.0, x, y + size / 2.0))
-        pnt.drawLine(QtCore.QLineF(x + size / 2.0, y + -size / 2.0,
-                                   x + size / 2.0, y + size / 2.0))
-        pnt.drawLine(QtCore.QLineF(x + size, y + -size / 2.0, x + size,
-                                   y + size / 2.0))
+        pnt.drawLine(QLineF(x, y + -size / 2.0, x, y + size / 2.0))
+        pnt.drawLine(QLineF(x + size / 2.0, y + -size / 2.0,
+                            x + size / 2.0, y + size / 2.0))
+        pnt.drawLine(QLineF(x + size, y + -size / 2.0, x + size,
+                            y + size / 2.0))
 
         # horizontal
-        pnt.drawLine(QtCore.QLineF(x, y + -size / 2.0, x + size,
-                                   y + -size / 2.0))
-        pnt.drawLine(QtCore.QLineF(x, y, x + size, y))
-        pnt.drawLine(QtCore.QLineF(x, y + size / 2.0, x + size,
-                                   y + size / 2.0))
+        pnt.drawLine(QLineF(x, y + -size / 2.0, x + size,
+                            y + -size / 2.0))
+        pnt.drawLine(QLineF(x, y, x + size, y))
+        pnt.drawLine(QLineF(x, y + size / 2.0, x + size,
+                            y + size / 2.0))
 
         pnt.restore()
 
@@ -797,14 +801,8 @@ class Route:
         else:
             x = self.offset
 
-        #print textRect
-
-        #pnt.drawText(x, textRect.height() + self.fontMetrics.descent(), s)
         pnt.drawText(x, -self.fontMetrics.descent() + textRect.height() / 2.0, s)
         x += textRect.width() + self.offset / 2.0
-
-#         pnt.drawText(10, 0, 200, 200, QtCore.Qt.AlignVCenter,
-#                      "%s %s" % (self.level, self.color))
 
         self.marker.paint(pnt, self.color, x)
         pnt.restore()
@@ -928,13 +926,13 @@ class MyWidget(QtGui.QWidget):
 
         CW.walls.paint(pnt, M.mode.drawEndPoints)
 
-        pen = QtGui.QPen(QtCore.Qt.red)
+        pen = QPen(QtCore.Qt.red)
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
         pnt.drawEllipse(M.mousePos.x - 2.5, M.mousePos.y - 2.5, 5, 5)
 
-        pen = QtGui.QPen(QtCore.Qt.blue)
+        pen = QPen(QtCore.Qt.blue)
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
