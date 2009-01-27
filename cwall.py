@@ -2,6 +2,7 @@
 # coding: Latin-1
 
 import error
+import gutil
 import util
 
 import sys, random, math
@@ -10,10 +11,14 @@ import lxml.etree as etree
 from PyQt4 import QtGui, QtCore
 
 QRectF = QtCore.QRectF
+QPointF = QtCore.QPointF
 QLineF = QtCore.QLineF
 QPen = QtGui.QPen
 
 SQRT_2 = math.sqrt(2)
+
+# size of small marker circles
+CIRCLE_SIZE = 5
 
 class Color:
     def __init__(self, name, r, g, b):
@@ -142,6 +147,13 @@ class Main:
 
         self.mousePos = Point(x, y)
 
+        if 0:
+            print "physical mouse pos: (%f, %f)" % (
+                self.physicalMousePos.x, self.physicalMousePos.y)
+            print "logical mouse pos: (%f, %f)\n" % (
+                x, y)
+
+
 # base class for modes
 class Mode:
     def __init__(self, drawEndPoints = False):
@@ -194,8 +206,7 @@ class WallMoveMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            pnt.drawEllipse(self.closestPt.x - 2.5,
-                            self.closestPt.y - 2.5, 5, 5)
+            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -248,8 +259,7 @@ class WallCombineMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            pnt.drawEllipse(self.closestPt.x - 2.5,
-                            self.closestPt.y - 2.5, 5, 5)
+            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -312,8 +322,7 @@ class WallSplitMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            pnt.drawEllipse(self.closestPt.x - 2.5,
-                            self.closestPt.y - 2.5, 5, 5)
+            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -343,8 +352,7 @@ class RouteAddMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            pnt.drawEllipse(self.closestPt.x - 2.5,
-                            self.closestPt.y - 2.5, 5, 5)
+            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -600,7 +608,7 @@ class Walls:
         pnt.setPen(self.pen)
 
         for wall in self.walls:
-            pnt.drawLine(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y)
+            pnt.drawLine(QLineF(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y))
 
         if drawEndPoints:
             for pt in self.points:
@@ -791,7 +799,7 @@ class Route:
 
         #pnt.scale(0.5, 0.5)
 
-        #pnt.drawLine(0, 0, self.offset, 0)
+        #pnt.drawLine(QLineF(0, 0, self.offset, 0))
 
         s = "%s %s" % (self.level, self.color.name)
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
@@ -801,7 +809,10 @@ class Route:
         else:
             x = self.offset
 
-        pnt.drawText(x, -self.fontMetrics.descent() + textRect.height() / 2.0, s)
+        pnt.drawText(
+            QPointF(x, -self.fontMetrics.descent() + textRect.height() / 2.0),
+            s)
+
         x += textRect.width() + self.offset / 2.0
 
         self.marker.paint(pnt, self.color, x)
@@ -930,7 +941,7 @@ class MyWidget(QtGui.QWidget):
         pen.setWidthF(2.0)
         pnt.setPen(pen)
 
-        pnt.drawEllipse(M.mousePos.x - 2.5, M.mousePos.y - 2.5, 5, 5)
+        gutil.drawEllipse(pnt, M.mousePos, CIRCLE_SIZE)
 
         pen = QPen(QtCore.Qt.blue)
         pen.setWidthF(2.0)
