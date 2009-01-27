@@ -1,10 +1,12 @@
 #!/usr/bin/python
 # coding: Latin-1
 
-import lxml.etree as etree
+import error
 import util
 
 import sys, random, math
+
+import lxml.etree as etree
 from PyQt4 import QtGui, QtCore
 
 SQRT_2 = math.sqrt(2)
@@ -45,8 +47,15 @@ class Main:
 #             ("Edit routes", RouteEditMode)
             ]
 
+        # key = Mode subclass class object, value = index in above list
+        self.mode2index = {}
+
+        for index, (name, modeClass) in enumerate(self.modes):
+            self.mode2index[modeClass] = index
+
         # mode selection combobox
         self.modeCombo = None
+
 
         # main widget (MyWidget)
         self.w = None
@@ -56,9 +65,10 @@ class Main:
 
         self.clear()
 
-    def clear(self):
-        # physical mouse pos in window system pixel coordinates
-        self.physicalMousePos = Point(-1, -1)
+    def clear(self, initTime = True):
+        if initTime:
+            # physical mouse pos in window system pixel coordinates
+            self.physicalMousePos = Point(-1, -1)
 
         # logical mouse pos in translated / scaled coordinates
         self.mousePos = Point(-1, -1)
@@ -78,11 +88,33 @@ class Main:
     def saveCW(self):
         CW.save()
 
-    def setMode(self, modeClass):
+    def loadCW(self):
+        global CW
+
+        data = util.loadFile("pump2.xml", self.mw)
+
+        if data is None:
+            return
+
+        try:
+            CW = ClimbingWall.load(data)
+            M.clear(False)
+            M.calcMousePos()
+            M.setMode(WallMoveMode, True)
+
+        except error.ConfigError, e:
+            QtGui.QMessageBox.critical(
+                self.mw, "Error", "Error loading file '%s': %s" % (
+                    "pump2.xml", e))
+
+    def setMode(self, modeClass, setCombo):
         if modeClass is self.modeClass:
             return
 
         #self.mode.deactivate()
+
+        if setCombo:
+            self.modeCombo.setCurrentIndex(self.mode2index[modeClass])
 
         self.modeClass = modeClass
         self.mode = modeClass()
@@ -92,7 +124,7 @@ class Main:
 
     def modeComboActivated(self):
         self.setMode(self.modeCombo.itemData(
-                self.modeCombo.currentIndex()).toPyObject())
+                self.modeCombo.currentIndex()).toPyObject(), False)
 
     # calculate logical mouse pos from physical mouse pos
     def calcMousePos(self):
@@ -318,14 +350,17 @@ class RouteAddMode(Mode):
 # a single continuous climbing wall, consisting of wall segments and
 # routes positioned on those segments
 class ClimbingWall:
+    # file-format version that we write out
+    VERSION = 1
+
     def __init__(self):
         self.routes = []
-        self.walls = Walls()
+        self.walls = Walls.createInitial()
         self.id = util.UUID()
 
     def save(self):
         el = etree.Element("ClimbingWall")
-        el.set("version", "1")
+        el.set("version", str(self.__class__.VERSION))
         el.set("id", self.id)
         el.append(self.walls.toXml(el))
 
@@ -333,6 +368,29 @@ class ClimbingWall:
                               encoding = "UTF-8", pretty_print = True)
 
         util.writeToFile("pump2.xml", data, M.mw)
+
+    @staticmethod
+    def load(data):
+        try:
+            root = etree.XML(data)
+            cw = ClimbingWall()
+
+            version = util.str2int(util.getAttr(root, "version"), 0)
+
+            util.cfgAssert(version > 0, "Invalid version attribute")
+
+            util.cfgAssert(version <= cw.__class__.VERSION,
+                           "File uses a newer format than this program recognizes."
+                           " Please upgrade your program.")
+
+            cw.id = util.getUUIDAttr(root, "id")
+
+            cw.walls = Walls.load(root)
+
+            return cw
+
+        except etree.XMLSyntaxError, e:
+            util.cfgAssert(0, "XML parsing error: %s" % e)
 
 def getNextColor():
     global _currentColor
@@ -388,6 +446,15 @@ class Point:
         el.set("y", util.float2str(self.y))
 
         return el
+
+    @staticmethod
+    def load(el):
+        p = Point(-1, -1)
+
+        p.x = util.getFloatAttr(el, "x")
+        p.y = util.getFloatAttr(el, "y")
+
+        return p
 
 # return Point on line segment (A, B) that's closest to P as first element
 # of tuple, and a value between [0,1] as a second element that tells how
@@ -474,10 +541,38 @@ class Wall:
 
         return el
 
+    @staticmethod
+    def load(el, walls):
+        w = Wall(None, None)
+
+        w.id = util.getUUIDAttr(el, "id")
+
+        # use the next pair of points
+        index = len(walls.walls)
+
+        util.cfgAssert((index + 1) < len(walls.points),
+                       "Not enough points defined")
+
+        w.p1 = walls.points[index]
+        w.p2 = walls.points[index + 1]
+
+        return w
 
 class Walls:
     def __init__(self):
-        self.points = [
+        self.points = []
+        self.walls = []
+
+        self.pen = QtGui.QPen(QtCore.Qt.black)
+        self.pen.setWidthF(2.0)
+
+    # return initial object suitable for use if nothing else is loaded on
+    # startup
+    @staticmethod
+    def createInitial():
+        w = Walls()
+
+        w.points = [
             Point(600, 550),
             Point(620, 400),
             Point(750, 200),
@@ -490,13 +585,12 @@ class Walls:
             Point(30, 550)
             ]
 
-        self.walls = []
+        w.walls = []
 
-        for i in xrange(1, len(self.points)):
-            self.walls.append(Wall(self.points[i - 1], self.points[i]))
+        for i in xrange(1, len(w.points)):
+            w.walls.append(Wall(w.points[i - 1], w.points[i]))
 
-        self.pen = QtGui.QPen(QtCore.Qt.black)
-        self.pen.setWidthF(2.0)
+        return w
 
     def paint(self, pnt, drawEndPoints):
         pnt.setPen(self.pen)
@@ -519,6 +613,21 @@ class Walls:
             wallEl.append(w.toXml())
 
         return el
+
+    @staticmethod
+    def load(root):
+        w = Walls()
+
+        for el in root.xpath("Points/Point"):
+            w.points.append(Point.load(el))
+
+        for el in root.xpath("Walls/Wall"):
+            w.walls.append(Wall.load(el, w))
+
+        util.cfgAssert(len(w.walls) == (len(w.points) - 1),
+                       "Invalid number of points or walls")
+
+        return w
 
 class Marker:
     SIZE = 18
@@ -850,6 +959,7 @@ def main():
     mb = mw.menuBar()
     fmenu = mb.addMenu("&File")
     fmenu.addAction("Save climbing wall", M.saveCW, QtGui.QKeySequence.Save)
+    fmenu.addAction("Load climbing wall", M.loadCW, QtGui.QKeySequence.Open)
 
     w = QtGui.QWidget()
     vbox = QtGui.QVBoxLayout(w)
@@ -885,7 +995,7 @@ def main():
 
     mw.setCentralWidget(w)
 
-    M.setMode(WallMoveMode)
+    M.setMode(WallMoveMode, True)
 
     mw.show()
     M.w.setFocus()

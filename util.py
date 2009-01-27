@@ -1,3 +1,5 @@
+import error
+
 import os
 import time
 import uuid
@@ -30,6 +32,28 @@ class TimerDev:
         print "%s%s took %.5f seconds" % (" " * self.__class__.nestingLevel,
                                           self.msg, self.t)
 
+# load at most maxSize (all if -1) bytes from 'filename', returning the
+# data as a string or None on errors. pops up message boxes using 'parent'
+# as parent on errors.
+def loadFile(filename, parent, maxSize = -1):
+    ret = None
+
+    try:
+        f = open(filename, "rb")
+
+        try:
+            ret = f.read(maxSize)
+        finally:
+            f.close()
+
+    except IOError, (errno, strerror):
+        QtGui.QMessageBox.critical(
+            parent, "Error", "Error loading file '%s': %s" % (
+                filename, strerror))
+        ret = None
+
+    return ret
+
 # write 'data' to 'filename', popping up a messagebox using 'parent'
 # (QWidget) as parent on errors. returns True on success.
 def writeToFile(filename, data, parent):
@@ -61,6 +85,85 @@ def float2str(val):
 
     return s
 
+# clamps the given value to a specific range. both limits are optional.
+def clamp(val, minVal = None, maxVal = None):
+    ret = val
+
+    if minVal != None:
+        ret = max(ret, minVal)
+
+    if maxVal != None:
+        ret = min(ret, maxVal)
+
+    return ret
+
+# convert given string to float, clamping it to the given range
+# (optional). never throws any exceptions, return defVal (possibly clamped
+# as well) on any errors.
+def str2float(s, defVal, minVal = None, maxVal = None):
+    val = defVal
+
+    try:
+        val = float(s)
+    except (ValueError, OverflowError):
+        pass
+
+    return clamp(val, minVal, maxVal)
+
+# like str2float, but for ints.
+def str2int(s, defVal, minVal = None, maxVal = None, radix = 10):
+    val = defVal
+
+    try:
+        val = int(s, radix)
+    except ValueError:
+        pass
+
+    return clamp(val, minVal, maxVal)
+
+# get named attribute value from el, which is an etree.Element. throws
+# error.ConfigError if attribute does not exist.
+def getAttr(el, attrName):
+    val = el.get(attrName)
+
+    cfgAssert(val is not None, "Attribute '%s' not found in element '%s'" % (
+            attrName, el.tag))
+
+    return val
+
+# like getAttr, but validates value for being a valid float, and returns a
+# float.
+def getFloatAttr(el, attrName):
+    val = str2float(getAttr(el, attrName), None)
+
+    cfgAssert(val is not None,
+              "Invalid float attribute '%s' in element '%s'" % (
+            attrName, el.tag))
+
+    return val
+
+# like getAttr, but also validates value for being a valid UUID
+def getUUIDAttr(el, attrName):
+    val = getAttr(el, attrName)
+
+    cfgAssert(isValidUUID(val),
+              "Invalid ID attribute '%s' in element '%s'" % (
+            attrName, el.tag))
+
+    return val
+
 # return random new UUID
 def UUID():
     return uuid.uuid4().hex
+
+# return true if uuid is a valid string representation of an UUID
+def isValidUUID(uuid):
+    return ((len(uuid) == 32) and
+            (str2int(uuid, defVal = None, radix = 16) is not None))
+
+def cfgAssert(val, s):
+    myAssert(val, s, error.ConfigError)
+
+def myAssert(val, s, errorClass):
+    if not val:
+        raise errorClass(s)
