@@ -146,24 +146,63 @@ class Main:
         self.setMode(self.modeCombo.itemData(
                 self.modeCombo.currentIndex()).toPyObject(), False)
 
-    # calculate logical mouse pos from physical mouse pos
-    def calcMousePos(self):
-        x, y = self.physicalMousePos.x, self.physicalMousePos.y
+    # transform physical coordinates to logical coordinates, returning the
+    # new (x, y) pair
+    def phys2log(self, x, y):
+        x /= self.viewportScale
+        y /= self.viewportScale
 
         x -= self.viewportOffset.x
         y -= self.viewportOffset.y
 
-        x /= self.viewportScale
-        y /= self.viewportScale
+        return (x, y)
 
-        self.mousePos = Point(x, y)
+    # calculate logical mouse pos from physical mouse pos
+    def calcMousePos(self):
+        self.mousePos = Point(*self.phys2log(
+                self.physicalMousePos.x, self.physicalMousePos.y))
 
+        # FIXME: debug stuff, remove
         if 0:
             print "physical mouse pos: (%f, %f)" % (
                 self.physicalMousePos.x, self.physicalMousePos.y)
             print "logical mouse pos: (%f, %f)\n" % (
-                x, y)
+                self.mousePos.x, self.mousePos.y)
 
+    # set zoom scale. scale = 1.0 means logical/physical coordinates map
+    # 1-to-1.
+    def setZoom(self, scale):
+        size = self.w.size()
+
+        # center point
+        centerX, centerY = self.phys2log(
+            size.width() / 2.0, size.height() / 2.0)
+
+        # logical new size
+        logW = size.width() / scale
+        logH = size.height() / scale
+
+        self.viewportScale = float(scale)
+        self.viewportOffset.x = -centerX + logW / 2.0
+        self.viewportOffset.y = -centerY + logH / 2.0
+
+        # FIXME: debug stuff, remove
+        if 0:
+            print "center: %s,%s" % (centerX, centerY)
+            print "size: %s" % size
+            print "log size: %s,%s" % (logW, logH)
+            print "offset: %s,%s" % (self.viewportOffset.x, self.viewportOffset.y)
+
+        self.calcMousePos()
+        self.mode.moveEvent()
+
+    def zoomIn(self):
+        # FIXME: have some maximum limit
+        self.setZoom(M.viewportScale * 1.1)
+
+    def zoomOut(self):
+        # FIXME: have some minimum limit
+        self.setZoom(M.viewportScale * 0.9)
 
 # base class for modes
 class Mode:
@@ -892,6 +931,7 @@ class MyWidget(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self, parent)
 
+        self.setMinimumSize(800, 600)
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
         self.setMouseTracking(True)
         self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
@@ -953,16 +993,11 @@ class MyWidget(QtGui.QWidget):
         # center position of viewport unchanged
 
         elif key == QtCore.Qt.Key_Plus:
-            M.viewportScale *= 1.1
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.zoomIn()
             self.update()
 
         elif key == QtCore.Qt.Key_Minus:
-            # FIXME: need some minimum limit for scale
-            M.viewportScale *= 0.9
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.zoomOut()
             self.update()
 
         else:
@@ -996,11 +1031,11 @@ class MyWidget(QtGui.QWidget):
     def paint(self, pnt):
         #size = self.size()
 
-        voffs = M.viewportOffset
-        pnt.translate(voffs.x, voffs.y)
-
         #print "scale: %f" % M.viewportScale
         pnt.scale(M.viewportScale, M.viewportScale)
+
+        voffs = M.viewportOffset
+        pnt.translate(voffs.x, voffs.y)
 
         pnt.setRenderHint(QtGui.QPainter.Antialiasing)
         pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
@@ -1031,7 +1066,7 @@ def main():
     app = QtGui.QApplication(sys.argv)
 
     mw = QtGui.QMainWindow()
-    mw.setGeometry(400, 50, 850, 700)
+    mw.move(400,50)
     mw.setWindowTitle("Climbing walls")
     M.mw = mw
 
