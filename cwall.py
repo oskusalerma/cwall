@@ -61,6 +61,7 @@ class Main:
 
         self.modes = [
             ("Move walls", WallMoveMode),
+            ("Add walls", WallAddMode),
             ("Split walls", WallSplitMode),
             ("Combine walls", WallCombineMode),
             ("Add routes", RouteAddMode),
@@ -166,6 +167,7 @@ class Main:
         if 0:
             print "physical mouse pos: (%f, %f)" % (
                 self.physicalMousePos.x, self.physicalMousePos.y)
+        if 0:
             print "logical mouse pos: (%f, %f)\n" % (
                 self.mousePos.x, self.mousePos.y)
 
@@ -310,6 +312,53 @@ class WallCombineMode(Mode):
     def paint(self, pnt):
         if self.closestPt:
             gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
+
+        for route in CW.routes:
+            route.paint(pnt)
+
+
+class WallAddMode(Mode):
+    def __init__(self):
+        Mode.__init__(self, True)
+
+        self.closestPt = None
+
+    def activate(self):
+        print "activating wall add mode"
+
+    def buttonEvent(self, isPress):
+        if isPress and self.closestPt:
+            pt = Point(M.mousePos.x, M.mousePos.y)
+
+            if self.closestPt is CW.walls.points[0]:
+                wall = Wall(pt, CW.walls.points[0])
+                ptIdx = 0
+                wallIdx = 0
+            else:
+                wall = Wall(CW.walls.points[-1], pt)
+                ptIdx = len(CW.walls.points)
+                wallIdx = len(CW.walls.walls)
+
+            CW.walls.points.insert(ptIdx, pt)
+            CW.walls.walls.insert(wallIdx, wall)
+
+            self.closestPt = None
+
+    def moveEvent(self):
+        p1 = CW.walls.points[0]
+        p2 = CW.walls.points[-1]
+
+        if p1.distanceTo(M.mousePos) < p2.distanceTo(M.mousePos):
+            self.closestPt = p1
+        else:
+            self.closestPt = p2
+
+    def paint(self, pnt):
+        if self.closestPt:
+            pnt.setPen(CW.walls.pen)
+
+            pnt.drawLine(QLineF(self.closestPt.x, self.closestPt.y,
+                                M.mousePos.x, M.mousePos.y))
 
         for route in CW.routes:
             route.paint(pnt)
