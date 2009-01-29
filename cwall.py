@@ -20,6 +20,9 @@ SQRT_2 = math.sqrt(2)
 # size of small marker circles
 CIRCLE_SIZE = 5
 
+# font for displaying information about walls such as length etc
+WALL_FONT = QtGui.QFont("Courier 10 Pitch", 9)
+
 class Color:
     def __init__(self, name, r, g, b):
         self.name = name
@@ -77,6 +80,8 @@ class Main:
         # mode selection combobox
         self.modeCombo = None
 
+        # whether to show wall lengths checkbox
+        self.showWallLengthsCb = None
 
         # main widget (MyWidget)
         self.w = None
@@ -360,6 +365,9 @@ class WallAddMode(Mode):
             pnt.drawLine(QLineF(self.closestPt.x, self.closestPt.y,
                                 M.mousePos.x, M.mousePos.y))
 
+            if M.showWallLengthsCb.isChecked():
+                drawDistance(pnt, self.closestPt, M.mousePos)
+
         for route in CW.routes:
             route.paint(pnt)
 
@@ -516,6 +524,19 @@ def getNextColor():
 
     _currentColor = (_currentColor + 1) % len(COLORS)
     return COLORS[_currentColor]
+
+# draw distance between two points
+def drawDistance(pnt, p1, p2):
+    pnt.save()
+
+    dst = p1.distanceTo(p2)
+
+    pnt.setFont(WALL_FONT)
+    pnt.drawText(QPointF((p1.x + p2.x) / 2.0,
+                         (p1.y + p2.y) / 2.0),
+                 "%.2f m" % dst)
+
+    pnt.restore()
 
 class Point:
     def __init__(self, x, y):
@@ -722,8 +743,13 @@ class Walls:
     def paint(self, pnt, drawEndPoints):
         pnt.setPen(self.pen)
 
+        showWallLen = M.showWallLengthsCb.isChecked()
+
         for wall in self.walls:
             pnt.drawLine(QLineF(wall.p1.x, wall.p1.y, wall.p2.x, wall.p2.y))
+
+            if showWallLen:
+                drawDistance(pnt, wall.p1, wall.p2)
 
         if drawEndPoints:
             for pt in self.points:
@@ -1151,8 +1177,17 @@ def main():
                            M.modeComboActivated)
 
     hbox.addWidget(M.modeCombo)
+
+    M.showWallLengthsCb = QtGui.QCheckBox("Show wall lengths", w)
+
+    QtCore.QObject.connect(M.showWallLengthsCb, QtCore.SIGNAL("stateChanged(int)"),
+                           w.update)
+
+    hbox.addWidget(M.showWallLengthsCb)
+
     hbox.addStretch()
 
+    hbox.setSpacing(10)
     hbox.setContentsMargins(5, 5, 5, 5)
 
     vbox.addLayout(hbox)
