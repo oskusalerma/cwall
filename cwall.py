@@ -1020,6 +1020,18 @@ class MyWidget(QtGui.QWidget):
         M.mode.buttonEvent(False)
         self.update()
 
+    def wheelEvent(self, event):
+        steps = event.delta() / 120.0
+
+        if steps > 0:
+            M.zoomIn()
+        else:
+            M.zoomOut()
+
+        event.accept()
+
+        self.update()
+
     def paintEvent(self, event):
         pnt = QtGui.QPainter()
         pnt.begin(self)
