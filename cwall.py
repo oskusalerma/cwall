@@ -17,11 +17,21 @@ QPen = QtGui.QPen
 
 SQRT_2 = math.sqrt(2)
 
-# size of small marker circles
-CIRCLE_SIZE = 5
+# Qt's font rendering system can't really handle font sizes as small as
+# 0.09 and then scaling the painting context up 50x, so internally we
+# operate not in meters but in centimeters so we can use 100x bigger
+# numbers. all user-exposed numbers are in meters though.
+SCALE = 100.0
+
+# size of small marker circles, in pixels
+CIRCLE_SIZE = 8
+
+# size of small marker rectangles
+RECTANGLE_SIZE = 20
 
 # font for displaying information about walls such as length etc
-WALL_FONT = QtGui.QFont("Courier 10 Pitch", 9)
+WALL_FONT = QtGui.QFont("Courier New", 18)
+WALL_FONT.setPixelSize(48)
 
 class Color:
     def __init__(self, name, r, g, b):
@@ -103,7 +113,7 @@ class Main:
         self.route = Route()
 
         self.viewportOffset = Point(0.0, 0.0)
-        self.viewportScale = 1.0
+        self.viewportScale = 0.2
 
         # mode class (WallMoveMode, ...)
         self.modeClass = None
@@ -174,7 +184,7 @@ class Main:
                 self.physicalMousePos.x, self.physicalMousePos.y)
         if 0:
             print "logical mouse pos: (%f, %f)\n" % (
-                self.mousePos.x, self.mousePos.y)
+                self.mousePos.x / SCALE, self.mousePos.y / SCALE)
 
     # set zoom scale. scale = 1.0 means logical/physical coordinates map
     # 1-to-1.
@@ -263,7 +273,8 @@ class WallMoveMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
+            gutil.drawEllipse(pnt, self.closestPt,
+                              CIRCLE_SIZE / M.viewportScale)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -283,8 +294,6 @@ class WallCombineMode(Mode):
         if isPress and self.closestPt:
             pt = self.closestPt
             w1, w2 = pt.getWalls()
-
-            print w1, w2
 
             # can't delete start or end points (for now, anyway)
             if not w1 or not w2:
@@ -316,7 +325,8 @@ class WallCombineMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
+            gutil.drawEllipse(pnt, self.closestPt,
+                              CIRCLE_SIZE / M.viewportScale)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -429,7 +439,8 @@ class WallSplitMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
+            gutil.drawEllipse(pnt, self.closestPt,
+                              CIRCLE_SIZE / M.viewportScale)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -459,7 +470,8 @@ class RouteAddMode(Mode):
 
     def paint(self, pnt):
         if self.closestPt:
-            gutil.drawEllipse(pnt, self.closestPt, CIRCLE_SIZE)
+            gutil.drawEllipse(pnt, self.closestPt,
+                              CIRCLE_SIZE / M.viewportScale)
 
         for route in CW.routes:
             route.paint(pnt)
@@ -534,7 +546,7 @@ def drawDistance(pnt, p1, p2):
     pnt.setFont(WALL_FONT)
     pnt.drawText(QPointF((p1.x + p2.x) / 2.0,
                          (p1.y + p2.y) / 2.0),
-                 "%.2f m" % dst)
+                 "%.2f m" % (dst / SCALE))
 
     pnt.restore()
 
@@ -582,8 +594,8 @@ class Point:
     def toXml(self):
         el = etree.Element("Point")
 
-        el.set("x", util.float2str(self.x))
-        el.set("y", util.float2str(self.y))
+        el.set("x", util.float2str(self.x  / SCALE))
+        el.set("y", util.float2str(self.y / SCALE))
 
         return el
 
@@ -591,8 +603,8 @@ class Point:
     def load(el):
         p = Point(-1, -1)
 
-        p.x = util.getFloatAttr(el, "x")
-        p.y = util.getFloatAttr(el, "y")
+        p.x = util.getFloatAttr(el, "x") * SCALE
+        p.y = util.getFloatAttr(el, "y") * SCALE
 
         return p
 
@@ -704,7 +716,7 @@ class Walls:
         self.walls = []
 
         self.pen = QPen(QtCore.Qt.black)
-        self.pen.setWidthF(2.0)
+        self.pen.setWidthF(5.0)
 
     # return initial object suitable for use if nothing else is loaded on
     # startup
@@ -752,8 +764,11 @@ class Walls:
                 drawDistance(pnt, wall.p1, wall.p2)
 
         if drawEndPoints:
+            offset = RECTANGLE_SIZE / 2.0
+
             for pt in self.points:
-                pnt.drawRect(QRectF(pt.x - 2.5, pt.y - 2.5, 5.0, 5.0))
+                pnt.drawRect(QRectF(pt.x - offset, pt.y - offset,
+                                    RECTANGLE_SIZE, RECTANGLE_SIZE))
 
     def save(self, el):
         pointEl = etree.SubElement(el, "Points")
@@ -899,6 +914,7 @@ class Route:
         self.wall = None
 
         self.font = QtGui.QFont("DejaVu Sans Mono", 18)
+        self.font.setPixelSize(18)
         #self.font = QtGui.QFontDialog.getFont(self.font)[0]
 
         self.fontMetrics = QtGui.QFontMetrics(self.font)
@@ -1040,26 +1056,29 @@ class MyWidget(QtGui.QWidget):
             for i in xrange(50):
                 self.repaint()
 
+        # FIXME: make movement proportional, i.e. X% of current displayed
+        # size. now it's too slow if you're zoomed out and too fast if
+        # you're zoomed in.
         elif key == QtCore.Qt.Key_Up:
-            M.viewportOffset.y += 10.0
+            M.viewportOffset.y += 100.0
             M.calcMousePos()
             M.mode.moveEvent()
             self.update()
 
         elif key == QtCore.Qt.Key_Down:
-            M.viewportOffset.y -= 10.0
+            M.viewportOffset.y -= 100.0
             M.calcMousePos()
             M.mode.moveEvent()
             self.update()
 
         elif key == QtCore.Qt.Key_Left:
-            M.viewportOffset.x += 10.0
+            M.viewportOffset.x += 100.0
             M.calcMousePos()
             M.mode.moveEvent()
             self.update()
 
         elif key == QtCore.Qt.Key_Right:
-            M.viewportOffset.x -= 10.0
+            M.viewportOffset.x -= 100.0
             M.calcMousePos()
             M.mode.moveEvent()
             self.update()
@@ -1130,13 +1149,13 @@ class MyWidget(QtGui.QWidget):
         CW.walls.paint(pnt, M.mode.drawEndPoints)
 
         pen = QPen(QtCore.Qt.red)
-        pen.setWidthF(2.0)
+        pen.setWidthF(3.0 / M.viewportScale)
         pnt.setPen(pen)
 
-        gutil.drawEllipse(pnt, M.mousePos, CIRCLE_SIZE)
+        gutil.drawEllipse(pnt, M.mousePos, CIRCLE_SIZE / M.viewportScale)
 
         pen = QPen(QtCore.Qt.blue)
-        pen.setWidthF(2.0)
+        pen.setWidthF(3.0 / M.viewportScale)
         pnt.setPen(pen)
 
         M.mode.paint(pnt)
