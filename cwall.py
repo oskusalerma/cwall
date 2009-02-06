@@ -53,6 +53,7 @@ class Color:
 
         util.cfgAssert(0, "Unknown color '%s'" % s)
 
+# FIXME: move inside Color
 COLORS = [
     Color("Blue", 0, 0, 255),
     Color("Light blue", 128, 128, 255),
@@ -66,7 +67,43 @@ COLORS = [
     Color("Black", 0, 0, 0)
 ]
 
-_currentColor = -1
+class Rating:
+    # all possible Rating objects, ordered from easiest to hardest
+    RATINGS = []
+
+    def __init__(self, text, compareIdx):
+        # textual representation, e.g. "5.4" or "5.10a"
+        self.text = text
+
+        # integral comparison index, with easier routes having a lower
+        # number
+        self.compareIdx = compareIdx
+
+    @staticmethod
+    def add(ratings):
+        for s in ratings:
+            Rating.RATINGS.append(Rating(s, len(Rating.RATINGS)))
+
+    def save(self):
+        return self.text
+
+    @staticmethod
+    def load(s):
+        for r in Rating.RATINGS:
+            if r.text == s:
+                return r
+
+        util.cfgAssert(0, "Unknown rating '%s'" % s)
+
+Rating.add([
+        ("5.4"), ("5.5"), ("5.6"), ("5.7"), ("5.8"), ("5.9"),
+        ("5.10a"), ("5.10b"), ("5.10c"), ("5.10d"),
+        ("5.11a"), ("5.11b"), ("5.11c"), ("5.11d"),
+        ("5.12a"), ("5.12b"), ("5.12c"), ("5.12d"),
+        ("5.13a"), ("5.13b"), ("5.13c"), ("5.13d"),
+        ("5.14a"), ("5.14b"), ("5.14c"), ("5.14d"),
+        ("5.15a"), ("5.15b")
+        ])
 
 # misc globally needed stuff
 class Main:
@@ -78,7 +115,7 @@ class Main:
             ("Split walls", WallSplitMode),
             ("Combine walls", WallCombineMode),
             ("Add routes", RouteAddMode),
-#             ("Edit routes", RouteEditMode)
+            ("Edit routes", RouteEditMode)
             ]
 
         # key = Mode subclass class object, value = index in above list
@@ -110,7 +147,7 @@ class Main:
         self.mousePos = Point(-1, -1)
 
         self.mouseDown = False
-        self.route = Route()
+        self.route = None
 
         self.viewportOffset = Point(0.0, 0.0)
         self.viewportScale = 0.2
@@ -136,7 +173,7 @@ class Main:
             CW = ClimbingWall.load(data)
             M.clear(False)
             M.calcMousePos()
-            M.setMode(WallMoveMode, True)
+            M.setMode(RouteEditMode, True)
 
         except error.ConfigError, e:
             QtGui.QMessageBox.critical(
@@ -152,6 +189,7 @@ class Main:
         if setCombo:
             self.modeCombo.setCurrentIndex(self.mode2index[modeClass])
 
+        self.route = None
         self.modeClass = modeClass
         self.mode = modeClass()
         self.mode.activate()
@@ -450,6 +488,7 @@ class RouteAddMode(Mode):
     def __init__(self):
         Mode.__init__(self)
 
+        M.route = Route()
         self.closestPt = None
 
     def activate(self):
@@ -477,6 +516,35 @@ class RouteAddMode(Mode):
             route.paint(pnt)
 
         M.route.paint(pnt)
+
+
+class RouteEditMode(Mode):
+    def __init__(self):
+        Mode.__init__(self)
+
+        self.closestRoute = None
+
+    def activate(self):
+        print "activating route edit mode"
+
+    def buttonEvent(self, isPress):
+        if isPress and self.closestRoute:
+            editRoute(self.closestRoute)
+
+    def moveEvent(self):
+        r = getClosestRoute()
+
+        if r:
+            self.closestRoute = r
+
+    def paint(self, pnt):
+        if self.closestRoute:
+            r = self.closestRoute
+            gutil.drawEllipse(pnt, Point(r.x, r.y),
+                              CIRCLE_SIZE / M.viewportScale)
+
+        for route in CW.routes:
+            route.paint(pnt)
 
 # a single continuous climbing wall, consisting of wall segments and
 # routes positioned on those segments
@@ -531,11 +599,6 @@ class ClimbingWall:
         except etree.XMLSyntaxError, e:
             util.cfgAssert(0, "XML parsing error: %s" % e)
 
-def getNextColor():
-    global _currentColor
-
-    _currentColor = (_currentColor + 1) % len(COLORS)
-    return COLORS[_currentColor]
 
 # draw distance between two points
 def drawDistance(pnt, p1, p2):
@@ -668,8 +731,76 @@ def getClosestEndPoint():
             closestDistance = dst
             closestPt = pt
 
-    if closestPt:
-        return closestPt
+    return closestPt
+
+# return closest route to mouse cursor, or None if it does not exist
+def getClosestRoute():
+    closestDistance = 99999999.9
+    closestRoute = None
+
+    for route in CW.routes:
+        dst = M.mousePos.distanceTo(Point(route.x, route.y))
+
+        if dst < closestDistance:
+            closestDistance = dst
+            closestRoute = route
+
+    return closestRoute
+
+class RouteEditDlg(QtGui.QDialog):
+
+    def __init__(self, route):
+        QtGui.QDialog.__init__(self, M.mw)
+
+        self.route = route
+
+        self.setWindowTitle("Edit route")
+
+        fl = QtGui.QFormLayout(self)
+
+        combo = QtGui.QComboBox(self)
+        combo.setMaxVisibleItems(100)
+
+        for rating in Rating.RATINGS:
+            combo.addItem(rating.text, QtCore.QVariant(rating))
+
+            if rating is route.rating:
+                combo.setCurrentIndex(combo.count() - 1)
+
+        QtCore.QObject.connect(combo, QtCore.SIGNAL("activated(int)"),
+                               self.gui2cfg)
+
+        self.ratingCombo = combo
+
+        fl.addRow("Rating:", combo)
+
+        marker = MarkerSelectionWidget(route.marker, route.color, self)
+
+        QtCore.QObject.connect(marker, QtCore.SIGNAL("activated()"),
+                               self.gui2cfg)
+
+        fl.addRow("Marker:", marker)
+        self.markerSel = marker
+
+        # FIXME: add date-added/deleted
+
+    def gui2cfg(self):
+        self.route.rating = self.ratingCombo.itemData(
+            self.ratingCombo.currentIndex()).toPyObject()
+
+        self.route.color = self.markerSel.color
+        self.route.marker = self.markerSel.marker
+
+        M.w.update()
+
+# edit Route's properties
+def editRoute(route):
+    dlg = RouteEditDlg(route)
+
+    # FIXME: use with statement to show cursor while dialog is active
+    dlg.exec_()
+
+    #route.rating = "5.10a"
 
 class Wall:
     def __init__(self, p1, p2):
@@ -798,13 +929,14 @@ class Walls:
 class Marker:
     SIZE = 18
 
+    # all possible Marker objects
+    MARKERS = []
+
     # marker shapes
     SQUARE, RECTANGLE, CROSS, DIAMOND_TAIL = range(4)
 
-    # shape names
-    shapeNames = ["Square", "Rectangle", "Cross", "DiamondTail"]
-
-    def __init__(self, shape):
+    def __init__(self, name, shape):
+        self.name = name
         self.shape = shape
 
         self.pen = QPen(QtCore.Qt.black)
@@ -817,13 +949,13 @@ class Marker:
         return Marker.SIZE
 
     def save(self):
-        return Marker.shapeNames[self.shape]
+        return self.name
 
     @staticmethod
     def load(s):
-        for shape, shapeName in enumerate(Marker.shapeNames):
-            if shapeName == s:
-                return Marker(shape)
+        for marker in Marker.MARKERS:
+            if marker.name == s:
+                return marker
 
         util.cfgAssert(0, "Unknown marker shape '%s'" % s)
 
@@ -899,12 +1031,21 @@ class Marker:
 
         pnt.restore()
 
+Marker.MARKERS.extend(
+    [Marker("Square", Marker.SQUARE),
+     Marker("Rectangle", Marker.RECTANGLE),
+     Marker("Cross", Marker.CROSS),
+     Marker("DiamondTail", Marker.DIAMOND_TAIL)
+     ])
+
 class Route:
     def __init__(self):
         self.id = util.UUID()
-        self.rating = "5.15a"
-        self.color = getNextColor()
-        self.marker = Marker(Marker.SQUARE)
+        self.rating = Rating.RATINGS[0]
+        self.color = COLORS[0]
+        self.marker = Marker.MARKERS[0]
+
+        # FIXME: add date-added/deleted
 
         self.x = 0
         self.y = 0
@@ -962,7 +1103,7 @@ class Route:
         el.set("t", util.float2str(self.t))
         el.set("color", self.color.save())
         el.set("marker", self.marker.save())
-        el.set("rating", self.rating)
+        el.set("rating", self.rating.save())
 
         return el
 
@@ -973,7 +1114,7 @@ class Route:
         r.id = util.getUUIDAttr(el, "id")
         r.color = Color.load(util.getAttr(el, "color"))
         r.marker = Marker.load(util.getAttr(el, "marker"))
-        r.rating = util.getAttr(el, "rating")
+        r.rating = Rating.load(util.getAttr(el, "rating"))
 
         wallId = util.getUUIDAttr(el, "wallId")
         wall = cw.walls.getWallById(wallId)
@@ -1001,7 +1142,7 @@ class Route:
 
         #pnt.drawLine(QLineF(0, 0, self.offset, 0))
 
-        s = "%s %s" % (self.rating, self.color.name)
+        s = "%s %s" % (self.rating.text, self.color.name)
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
 
         if self.flipSide:
@@ -1018,8 +1159,72 @@ class Route:
         self.marker.paint(pnt, self.color, x)
         pnt.restore()
 
+class MarkerSelectionWidget(QtGui.QWidget):
+    def __init__(self, marker, color, parent):
+        QtGui.QWidget.__init__(self, parent)
+
+        self.marker = marker
+        self.color = color
+
+        # empty space between markers
+        self.spacing = 10
+
+        # empty space around complete widget
+        self.padding = 10
+
+        self.size = Marker.SIZE + self.spacing
+
+        self.setMinimumSize(
+            self.size * len(COLORS) - self.spacing + self.padding * 2,
+            self.size * len(Marker.MARKERS) - self.spacing + self.padding * 2)
+
+        self.pen = QPen(QtCore.Qt.black)
+        self.pen.setWidthF(1.0)
+
+    def mousePressEvent(self, event):
+        xp, yp = event.x(), event.y()
+
+        xp -= self.padding
+        yp -= self.padding
+
+        x = util.clamp(xp // self.size, 0, len(COLORS)- 1)
+        y = util.clamp(yp // self.size, 0, len(Marker.MARKERS) - 1)
+
+        self.marker = Marker.MARKERS[y]
+        self.color = COLORS[x]
+
+        self.update()
+
+        self.emit(QtCore.SIGNAL("activated()"))
+
+    def paintEvent(self, event):
+        pnt = QtGui.QPainter()
+        pnt.begin(self)
+
+        # FIXME: move render settings to common place
+        pnt.setRenderHint(QtGui.QPainter.Antialiasing)
+        pnt.setRenderHint(QtGui.QPainter.TextAntialiasing)
+
+        for y, marker in enumerate(Marker.MARKERS):
+            for x, color in enumerate(COLORS):
+                pnt.save()
+                pnt.translate(x * self.size + self.padding,
+                              y * self.size + Marker.SIZE / 2.0 + self.padding)
+                marker.paint(pnt, color, 0)
+
+                if marker is self.marker and color is self.color:
+                    pnt.setPen(self.pen)
+                    pnt.setBrush(QtCore.Qt.NoBrush)
+                    pnt.drawRect(-self.spacing / 2.0,
+                                  -Marker.SIZE / 2.0 - self.spacing / 2.0,
+                                  self.size, self.size)
+
+                pnt.restore()
+
+        pnt.end()
+
 class MyWidget(QtGui.QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent = None):
         QtGui.QWidget.__init__(self, parent)
 
         self.setMinimumSize(800, 600)
@@ -1082,9 +1287,6 @@ class MyWidget(QtGui.QWidget):
             M.calcMousePos()
             M.mode.moveEvent()
             self.update()
-
-        # FIXME: scale up/down need to adjust viewportOffset to keep
-        # center position of viewport unchanged
 
         elif key == QtCore.Qt.Key_Plus:
             M.zoomIn()
