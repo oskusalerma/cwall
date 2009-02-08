@@ -1002,7 +1002,12 @@ class Marker:
 
         elif self.shape == Marker.RECTANGLE:
             size /= 3.0
-            pnt.drawRect(QRectF(x, -size / 2.0, mSize, size))
+
+            pnt.save()
+            pnt.translate(x + mSize / 2.0, 0)
+            pnt.rotate(-45)
+            pnt.drawRect(QRectF(-mSize / 2.0, -size / 2.0, mSize, size))
+            pnt.restore()
 
         elif self.shape == Marker.CROSS:
             size /= 3.0
@@ -1177,7 +1182,10 @@ class Route:
 
         #pnt.drawLine(QLineF(0, 0, self.offset, 0))
 
-        s = "%s %s" % (self.rating.text, self.color.name)
+        # FIXME: have an option whether to include name of color
+        #s = "%s %s" % (self.rating.text, self.color.name)
+        s = "%s" % (self.rating.text)
+
         textRect = pnt.boundingRect(0, 0, 0, 0, 0, s)
 
         if self.flipSide:
