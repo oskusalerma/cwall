@@ -1,10 +1,11 @@
 import error
 
 import os
+import re
 import time
 import uuid
 
-from PyQt4 import QtGui
+from PyQt4 import QtGui, QtCore
 
 # return True if given file exists.
 def fileExists(filename):
@@ -31,6 +32,44 @@ class TimerDev:
         self.__class__.nestingLevel -= 1
         print "%s%s took %.5f seconds" % (" " * self.__class__.nestingLevel,
                                           self.msg, self.t)
+
+# simple Date class
+class Date:
+    def __init__(self):
+        self.year = 0
+        self.month = 0
+        self.day = 0
+
+    def save(self):
+        return "%04d-%02d-%02d" % (self.year, self.month, self.day)
+
+    @staticmethod
+    def load(s):
+        d = Date()
+
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
+
+        if not m:
+            cfgAssert(0, "Invalid Date attribute '%s'" % s)
+
+        d.year = int(m.group(1))
+        d.month = int(m.group(2))
+        d.day = int(m.group(3))
+
+        return d
+
+    def toQDate(self):
+        return QtCore.QDate(self.year, self.month, self.day)
+
+    @staticmethod
+    def fromQDate(qd):
+        d = Date()
+
+        d.year = qd.year()
+        d.month = qd.month()
+        d.day = qd.day()
+
+        return d
 
 # load at most maxSize (all if -1) bytes from 'filename', returning the
 # data as a string or None on errors. pops up message boxes using 'parent'
@@ -151,6 +190,16 @@ def getUUIDAttr(el, attrName):
             attrName, el.tag))
 
     return val
+
+# like getAttr, but also validates value for being a valid Date, and
+# returns None if attribute does not exist
+def getDateAttr(el, attrName):
+    val = el.get(attrName)
+
+    if val is None:
+        return None
+
+    return Date.load(val)
 
 # return random new UUID
 def UUID():

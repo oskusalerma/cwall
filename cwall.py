@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # coding: Latin-1
 
+from __future__ import with_statement
+
 import error
 import gutil
 import util
@@ -776,13 +778,24 @@ class RouteEditDlg(QtGui.QDialog):
 
         marker = MarkerSelectionWidget(route.marker, route.color, self)
 
-        QtCore.QObject.connect(marker, QtCore.SIGNAL("activated()"),
+        QtCore.QObject.connect(marker, QtCore.SIGNAL("stateChanged()"),
                                self.gui2cfg)
 
         fl.addRow("Marker:", marker)
         self.markerSel = marker
 
-        # FIXME: add date-added/deleted
+        self.addDate(fl, "dateAddedW", "added", route.dateAdded)
+        self.addDate(fl, "dateRemovedW", "removed", route.dateRemoved)
+
+    def addDate(self, fl, name, s, date):
+        w = DateWidget(self, date)
+
+        QtCore.QObject.connect(
+            w, QtCore.SIGNAL("stateChanged()"), self.gui2cfg)
+
+        fl.addRow("Date %s:" % s, w)
+
+        setattr(self, name, w)
 
     def gui2cfg(self):
         self.route.rating = self.ratingCombo.itemData(
@@ -790,17 +803,31 @@ class RouteEditDlg(QtGui.QDialog):
 
         self.route.color = self.markerSel.color
         self.route.marker = self.markerSel.marker
+        self.route.dateAdded = self.dateAddedW.date
+        self.route.dateRemoved = self.dateRemovedW.date
 
         M.w.update()
+
+# to be used for enabling cursor over main window when showing a modal
+# dialog (because the main window doesn't get mouse move events in that
+# case and thus won't draw its own cursor). usage:
+#
+#  with CursorShower():
+#    dlg.exec_()
+class CursorShower:
+    def __enter__(self):
+        M.w.setCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
+        return self
+
+    def __exit__(self, excType, value, traceback):
+        M.w.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
 
 # edit Route's properties
 def editRoute(route):
     dlg = RouteEditDlg(route)
 
-    # FIXME: use with statement to show cursor while dialog is active
-    dlg.exec_()
-
-    #route.rating = "5.10a"
+    with CursorShower():
+        dlg.exec_()
 
 class Wall:
     def __init__(self, p1, p2):
@@ -1044,8 +1071,8 @@ class Route:
         self.rating = Rating.RATINGS[0]
         self.color = COLORS[0]
         self.marker = Marker.MARKERS[0]
-
-        # FIXME: add date-added/deleted
+        self.dateAdded = None
+        self.dateRemoved = None
 
         self.x = 0
         self.y = 0
@@ -1105,6 +1132,12 @@ class Route:
         el.set("marker", self.marker.save())
         el.set("rating", self.rating.save())
 
+        if self.dateAdded:
+            el.set("dateAdded", self.dateAdded.save())
+
+        if self.dateRemoved:
+            el.set("dateRemoved", self.dateRemoved.save())
+
         return el
 
     @staticmethod
@@ -1115,6 +1148,8 @@ class Route:
         r.color = Color.load(util.getAttr(el, "color"))
         r.marker = Marker.load(util.getAttr(el, "marker"))
         r.rating = Rating.load(util.getAttr(el, "rating"))
+        r.dateAdded = util.getDateAttr(el, "dateAdded")
+        r.dateRemoved = util.getDateAttr(el, "dateRemoved")
 
         wallId = util.getUUIDAttr(el, "wallId")
         wall = cw.walls.getWallById(wallId)
@@ -1159,6 +1194,62 @@ class Route:
         self.marker.paint(pnt, self.color, x)
         pnt.restore()
 
+
+# date widget that has an on/off selection as well that means "no date is
+# specified at all"
+class DateWidget(QtGui.QWidget):
+    def __init__(self, parent, date):
+        QtGui.QWidget.__init__(self, parent)
+
+        hbox = QtGui.QHBoxLayout(self)
+        hbox.setContentsMargins(5, 0, 0, 0)
+
+        self.cb = QtGui.QCheckBox("Set", self)
+        self.cb.setChecked(date is not None)
+
+        QtCore.QObject.connect(
+            self.cb, QtCore.SIGNAL("stateChanged(int)"), self.gui2cfg)
+
+        hbox.addWidget(self.cb)
+
+        calW = QtGui.QCalendarWidget()
+        calW.setFirstDayOfWeek(QtCore.Qt.Monday)
+
+        if date:
+            qd = date.toQDate()
+        else:
+            qd = QtCore.QDate.currentDate()
+
+        dateW = QtGui.QDateEdit(qd, self)
+        dateW.setDisplayFormat("d MMM yyyy")
+        dateW.setCalendarPopup(True)
+        dateW.setCalendarWidget(calW)
+
+        dateW.setEnabled(date is not None)
+
+        QtCore.QObject.connect(
+            dateW, QtCore.SIGNAL("dateChanged(const QDate&)"), self.gui2cfg)
+
+        hbox.addWidget(dateW)
+        self.dateW = dateW
+
+        self.gui2cfg(emitEvent = False)
+
+    # unusedArg must remain so when Qt calls this from various signals the
+    # argument it passes us is swallowed up
+    def gui2cfg(self, unusedArg = None, emitEvent = True):
+        active = self.cb.isChecked()
+
+        self.dateW.setEnabled(active)
+
+        if active:
+            self.date = util.Date.fromQDate(self.dateW.date())
+        else:
+            self.date = None
+
+        if emitEvent:
+            self.emit(QtCore.SIGNAL("stateChanged()"))
+
 class MarkerSelectionWidget(QtGui.QWidget):
     def __init__(self, marker, color, parent):
         QtGui.QWidget.__init__(self, parent)
@@ -1195,7 +1286,7 @@ class MarkerSelectionWidget(QtGui.QWidget):
 
         self.update()
 
-        self.emit(QtCore.SIGNAL("activated()"))
+        self.emit(QtCore.SIGNAL("stateChanged()"))
 
     def paintEvent(self, event):
         pnt = QtGui.QPainter()
