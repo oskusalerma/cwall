@@ -57,16 +57,16 @@ class Color:
 
 # FIXME: move inside Color
 COLORS = [
-    Color("Blue", 0, 0, 255),
+    Color("Blue", 40, 67, 176),
     Color("Light blue", 128, 128, 255),
-    Color("Green", 31, 78, 52),
+    Color("Green", 41, 102, 68),
     Color("Light green", 19, 151, 126),
-    Color("Red", 255, 0, 0),
-    Color("Yellow", 255, 255, 0),
-    Color("Pink", 254, 36, 154),
-    Color("Orange", 255, 127, 0),
+    Color("Red", 245, 32, 34),
+    Color("Yellow", 237, 237, 0),
+    Color("Pink", 222, 47, 222),
+    Color("Orange", 230, 114, 0),
     Color("Brown", 150, 75, 0),
-    Color("White", 255, 255, 255),
+    Color("White", 240, 240, 240),
     Color("Black", 0, 0, 0)
 ]
 
