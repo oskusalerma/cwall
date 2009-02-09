@@ -59,7 +59,8 @@ class Color:
 COLORS = [
     Color("Blue", 0, 0, 255),
     Color("Light blue", 128, 128, 255),
-    Color("Green", 0, 255, 0),
+    Color("Green", 31, 78, 52),
+    Color("Light green", 19, 151, 126),
     Color("Red", 255, 0, 0),
     Color("Yellow", 255, 255, 0),
     Color("Pink", 254, 36, 154),
