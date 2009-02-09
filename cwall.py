@@ -227,6 +227,32 @@ class Main:
             print "logical mouse pos: (%f, %f)\n" % (
                 self.mousePos.x / SCALE, self.mousePos.y / SCALE)
 
+    def moveUp(self):
+        self.move(y = 0.05)
+
+    def moveDown(self):
+        self.move(y = -0.05)
+
+    def moveLeft(self):
+        self.move(x = 0.05)
+
+    def moveRight(self):
+        self.move(x = -0.05)
+
+    # move viewport around by specified percentage of width/height
+    def move(self, x = 0.0, y = 0.0):
+        size = self.w.size()
+
+        # logical size
+        logW = size.width() / self.viewportScale
+        logH = size.height() / self.viewportScale
+
+        M.viewportOffset.y += y * logH
+        M.viewportOffset.x += x * logW
+
+        M.calcMousePos()
+        M.mode.moveEvent()
+
     # set zoom scale. scale = 1.0 means logical/physical coordinates map
     # 1-to-1.
     def setZoom(self, scale):
@@ -1362,31 +1388,20 @@ class MyWidget(QtGui.QWidget):
             for i in xrange(50):
                 self.repaint()
 
-        # FIXME: make movement proportional, i.e. X% of current displayed
-        # size. now it's too slow if you're zoomed out and too fast if
-        # you're zoomed in.
         elif key == QtCore.Qt.Key_Up:
-            M.viewportOffset.y += 100.0
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.moveUp()
             self.update()
 
         elif key == QtCore.Qt.Key_Down:
-            M.viewportOffset.y -= 100.0
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.moveDown()
             self.update()
 
         elif key == QtCore.Qt.Key_Left:
-            M.viewportOffset.x += 100.0
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.moveLeft()
             self.update()
 
         elif key == QtCore.Qt.Key_Right:
-            M.viewportOffset.x -= 100.0
-            M.calcMousePos()
-            M.mode.moveEvent()
+            M.moveRight()
             self.update()
 
         elif key == QtCore.Qt.Key_Plus:
