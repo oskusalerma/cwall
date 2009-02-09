@@ -100,12 +100,23 @@ class Rating:
 
 Rating.add([
         ("5.4"), ("5.5"), ("5.6"), ("5.7"), ("5.8"), ("5.9"),
-        ("5.10a"), ("5.10b"), ("5.10c"), ("5.10d"),
-        ("5.11a"), ("5.11b"), ("5.11c"), ("5.11d"),
-        ("5.12a"), ("5.12b"), ("5.12c"), ("5.12d"),
-        ("5.13a"), ("5.13b"), ("5.13c"), ("5.13d"),
-        ("5.14a"), ("5.14b"), ("5.14c"), ("5.14d"),
-        ("5.15a"), ("5.15b")
+
+        ("5.10A"), ("5.10A/B"), ("5.10B"), ("5.10B/C"), ("5.10C"),
+        ("5.10C/D"), ("5.10D"),
+
+        ("5.11A"), ("5.11A/B"), ("5.11B"), ("5.11B/C"), ("5.11C"),
+        ("5.11C/D"), ("5.11D"),
+
+        ("5.12A"), ("5.12A/B"), ("5.12B"), ("5.12B/C"), ("5.12C"),
+        ("5.12C/D"), ("5.12D"),
+
+        ("5.13A"), ("5.13A/B"), ("5.13B"), ("5.13B/C"), ("5.13C"),
+        ("5.13C/D"), ("5.13D"),
+
+        ("5.14A"), ("5.14A/B"), ("5.14B"), ("5.14B/C"), ("5.14C"),
+        ("5.14C/D"), ("5.14D"),
+
+        ("5.15A"), ("5.15A/B"), ("5.15B")
         ])
 
 # misc globally needed stuff
@@ -118,7 +129,8 @@ class Main:
             ("Split walls", WallSplitMode),
             ("Combine walls", WallCombineMode),
             ("Add routes", RouteAddMode),
-            ("Edit routes", RouteEditMode)
+            ("Edit routes", RouteEditMode),
+            ("Move routes", RouteMoveMode)
             ]
 
         # key = Mode subclass class object, value = index in above list
@@ -575,6 +587,40 @@ class RouteEditMode(Mode):
 
         for route in CW.routes:
             route.paint(pnt)
+
+
+class RouteMoveMode(Mode):
+    def __init__(self):
+        Mode.__init__(self)
+
+        self.route = getClosestRoute()
+
+    def activate(self):
+        print "activating route move mode"
+
+    def buttonEvent(self, isPress):
+        if isPress:
+            self.moveEvent()
+
+    def moveEvent(self):
+        if not M.mouseDown:
+            self.route = getClosestRoute()
+
+        if M.mouseDown and self.route:
+            closestPt, closestWall, closestT = getClosestPoint()
+
+            if closestT:
+                self.route.attachTo(closestWall, closestT)
+
+    def paint(self, pnt):
+        if self.route:
+            r = self.route
+            gutil.drawEllipse(pnt, Point(r.x, r.y),
+                              CIRCLE_SIZE / M.viewportScale)
+
+        for route in CW.routes:
+            route.paint(pnt)
+
 
 # a single continuous climbing wall, consisting of wall segments and
 # routes positioned on those segments
@@ -1114,7 +1160,7 @@ class Route:
         self.angle = 0.0
         self.wall = None
 
-        self.font = QtGui.QFont("DejaVu Sans Mono", 18)
+        self.font = QtGui.QFont("Courier New Bold", 18)
         self.font.setPixelSize(18)
         #self.font = QtGui.QFontDialog.getFont(self.font)[0]
 
