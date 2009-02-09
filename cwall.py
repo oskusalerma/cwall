@@ -499,6 +499,7 @@ class RouteAddMode(Mode):
 
     def buttonEvent(self, isPress):
         if isPress:
+            editRoute(M.route)
             CW.routes.append(M.route)
             M.route = Route()
             self.moveEvent()
