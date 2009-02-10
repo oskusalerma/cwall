@@ -74,7 +74,7 @@ class Rating:
     # all possible Rating objects, ordered from easiest to hardest
     RATINGS = []
 
-    def __init__(self, text, compareIdx):
+    def __init__(self, text, compareIdx, fractional):
         # textual representation, e.g. "5.4" or "5.10a"
         self.text = text
 
@@ -82,10 +82,36 @@ class Rating:
         # number
         self.compareIdx = compareIdx
 
+        # are we fractional (between two ratings, e.g. 12A/B)
+        self.fractional = fractional
+
+        # the QCheckBox item associated with us
+        self.checkbox = None
+
+    # returns true if rating is active, i.e. routes with this rating
+    # should be displayed
+    def isActive(self):
+        if not self.fractional:
+            return self.checkbox.isChecked()
+
+        # for a fractiona rating like 12A/B, we're active if either 12A or
+        # 12B is active
+        rat = Rating.RATINGS
+
+        return (rat[self.compareIdx - 1].isActive() or
+                rat[self.compareIdx + 1].isActive())
+
     @staticmethod
     def add(ratings):
-        for s in ratings:
-            Rating.RATINGS.append(Rating(s, len(Rating.RATINGS)))
+        for it in ratings:
+            if isinstance(it, tuple):
+                s = it[0]
+                fractional = len(it) > 1
+            else:
+                s = it
+                fractional = False
+
+            Rating.RATINGS.append(Rating(s, len(Rating.RATINGS), fractional))
 
     def save(self):
         return self.text
@@ -99,24 +125,24 @@ class Rating:
         util.cfgAssert(0, "Unknown rating '%s'" % s)
 
 Rating.add([
-        ("5.4"), ("5.5"), ("5.6"), ("5.7"), ("5.8"), ("5.9"),
+        ("5.4",), ("5.5"), ("5.6"), ("5.7"), ("5.8"), ("5.9"),
 
-        ("5.10A"), ("5.10A/B"), ("5.10B"), ("5.10B/C"), ("5.10C"),
-        ("5.10C/D"), ("5.10D"),
+        ("5.10A"), ("5.10A/B", 1), ("5.10B"), ("5.10B/C", 1), ("5.10C"),
+        ("5.10C/D", 1), ("5.10D"),
 
-        ("5.11A"), ("5.11A/B"), ("5.11B"), ("5.11B/C"), ("5.11C"),
-        ("5.11C/D"), ("5.11D"),
+        ("5.11A"), ("5.11A/B", 1), ("5.11B"), ("5.11B/C", 1), ("5.11C"),
+        ("5.11C/D", 1), ("5.11D"),
 
-        ("5.12A"), ("5.12A/B"), ("5.12B"), ("5.12B/C"), ("5.12C"),
-        ("5.12C/D"), ("5.12D"),
+        ("5.12A"), ("5.12A/B", 1), ("5.12B"), ("5.12B/C", 1), ("5.12C"),
+        ("5.12C/D", 1), ("5.12D"),
 
-        ("5.13A"), ("5.13A/B"), ("5.13B"), ("5.13B/C"), ("5.13C"),
-        ("5.13C/D"), ("5.13D"),
+        ("5.13A"), ("5.13A/B", 1), ("5.13B"), ("5.13B/C", 1), ("5.13C"),
+        ("5.13C/D", 1), ("5.13D"),
 
-        ("5.14A"), ("5.14A/B"), ("5.14B"), ("5.14B/C"), ("5.14C"),
-        ("5.14C/D"), ("5.14D"),
+        ("5.14A"), ("5.14A/B", 1), ("5.14B"), ("5.14B/C", 1), ("5.14C"),
+        ("5.14C/D", 1), ("5.14D"),
 
-        ("5.15A"), ("5.15A/B"), ("5.15B")
+        ("5.15A"), ("5.15A/B", 1), ("5.15B")
         ])
 
 # misc globally needed stuff
@@ -207,13 +233,19 @@ class Main:
         self.route = None
         self.modeClass = modeClass
         self.mode = modeClass()
-        self.mode.activate()
+        self.mode.moveEvent()
 
         self.w.update()
 
     def modeComboActivated(self):
         self.setMode(self.modeCombo.itemData(
                 self.modeCombo.currentIndex()).toPyObject(), False)
+
+    def updateRouteFilter(self):
+        CW.updateRouteFilter()
+
+        self.mode.moveEvent()
+        self.w.update()
 
     # transform physical coordinates to logical coordinates, returning the
     # new (x, y) pair
@@ -305,10 +337,6 @@ class Mode:
     def __init__(self, drawEndPoints = False):
         self.drawEndPoints = drawEndPoints
 
-    # mode activated
-    def activate(self):
-        raise "abstract method called"
-
     # mouse button press/release
     def buttonEvent(self, isPress, x, y):
         raise "abstract method called"
@@ -326,10 +354,7 @@ class WallMoveMode(Mode):
         Mode.__init__(self, True)
 
         # closest wall end point
-        self.closestPt = getClosestEndPoint()
-
-    def activate(self):
-        print "activating wall move mode"
+        self.closestPt = None
 
     def buttonEvent(self, isPress):
         if isPress:
@@ -355,8 +380,7 @@ class WallMoveMode(Mode):
             gutil.drawEllipse(pnt, self.closestPt,
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 class WallCombineMode(Mode):
@@ -364,10 +388,7 @@ class WallCombineMode(Mode):
         Mode.__init__(self, True)
 
         # closest wall end point
-        self.closestPt = getClosestEndPoint()
-
-    def activate(self):
-        print "activating wall combine mode"
+        self.closestPt = None
 
     def buttonEvent(self, isPress):
         if isPress and self.closestPt:
@@ -407,8 +428,7 @@ class WallCombineMode(Mode):
             gutil.drawEllipse(pnt, self.closestPt,
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 class WallAddMode(Mode):
@@ -416,9 +436,6 @@ class WallAddMode(Mode):
         Mode.__init__(self, True)
 
         self.closestPt = None
-
-    def activate(self):
-        print "activating wall add mode"
 
     def buttonEvent(self, isPress):
         if isPress and self.closestPt:
@@ -457,8 +474,7 @@ class WallAddMode(Mode):
             if M.showWallLengthsCb.isChecked():
                 drawDistance(pnt, self.closestPt, M.mousePos)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 class WallSplitMode(Mode):
@@ -468,9 +484,6 @@ class WallSplitMode(Mode):
         self.closestPt = None
         self.closestWall = None
         self.closestT = None
-
-    def activate(self):
-        print "activating wall split mode"
 
     def buttonEvent(self, isPress):
         if isPress and self.closestWall:
@@ -521,8 +534,7 @@ class WallSplitMode(Mode):
             gutil.drawEllipse(pnt, self.closestPt,
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 class RouteAddMode(Mode):
@@ -532,13 +544,11 @@ class RouteAddMode(Mode):
         M.route = Route()
         self.closestPt = None
 
-    def activate(self):
-        print "activating route add mode"
-
     def buttonEvent(self, isPress):
         if isPress:
             editRoute(M.route)
             CW.routes.append(M.route)
+            CW.updateRouteFilter()
             M.route = Route()
             self.moveEvent()
 
@@ -554,8 +564,7 @@ class RouteAddMode(Mode):
             gutil.drawEllipse(pnt, self.closestPt,
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
         M.route.paint(pnt)
 
@@ -565,9 +574,6 @@ class RouteEditMode(Mode):
         Mode.__init__(self)
 
         self.closestRoute = None
-
-    def activate(self):
-        print "activating route edit mode"
 
     def buttonEvent(self, isPress):
         if isPress and self.closestRoute:
@@ -585,8 +591,7 @@ class RouteEditMode(Mode):
             gutil.drawEllipse(pnt, Point(r.x, r.y),
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 class RouteMoveMode(Mode):
@@ -594,9 +599,6 @@ class RouteMoveMode(Mode):
         Mode.__init__(self)
 
         self.route = getClosestRoute()
-
-    def activate(self):
-        print "activating route move mode"
 
     def buttonEvent(self, isPress):
         if isPress:
@@ -618,8 +620,7 @@ class RouteMoveMode(Mode):
             gutil.drawEllipse(pnt, Point(r.x, r.y),
                               CIRCLE_SIZE / M.viewportScale)
 
-        for route in CW.routes:
-            route.paint(pnt)
+        CW.paintRoutes(pnt)
 
 
 # a single continuous climbing wall, consisting of wall segments and
@@ -629,9 +630,26 @@ class ClimbingWall:
     VERSION = 1
 
     def __init__(self):
+        # all routes
         self.routes = []
+
+        # active routes (i.e. not filtered out of current view)
+        self.activeRoutes = []
+
         self.walls = Walls.createInitial()
         self.id = util.UUID()
+
+    # update activeRoutes based on current filter settings
+    def updateRouteFilter(self):
+        del self.activeRoutes[:]
+
+        for route in self.routes:
+            if route.rating.isActive():
+                self.activeRoutes.append(route)
+
+    def paintRoutes(self, pnt):
+        for route in self.activeRoutes:
+            route.paint(pnt)
 
     def save(self):
         el = etree.Element("ClimbingWall")
@@ -669,6 +687,8 @@ class ClimbingWall:
 
             for el in root.xpath("Routes/Route"):
                 cw.routes.append(Route.load(el, cw))
+
+            cw.updateRouteFilter()
 
             return cw
 
@@ -809,12 +829,13 @@ def getClosestEndPoint():
 
     return closestPt
 
-# return closest route to mouse cursor, or None if it does not exist
+# return closest active route to mouse cursor, or None if it does not
+# exist
 def getClosestRoute():
     closestDistance = 99999999.9
     closestRoute = None
 
-    for route in CW.routes:
+    for route in CW.activeRoutes:
         dst = M.mousePos.distanceTo(Point(route.x, route.y))
 
         if dst < closestDistance:
@@ -1168,6 +1189,8 @@ class Route:
 
         self.offset = 10
         self.flipSide = False
+
+        # FIXME: save/load flipside, make editable on dialog
 
     def attachTo(self, wall, t):
         if self.wall:
@@ -1568,9 +1591,44 @@ def main():
 
     hbox.addWidget(M.showWallLengthsCb)
 
+
+    vbox2 = None
+
+    # FIXME: Add some label or surrounding frame for filter settings
+    for rating in Rating.RATINGS:
+        if rating.fractional:
+            continue
+
+        if not vbox2:
+            vbox2 = QtGui.QVBoxLayout()
+            vbox2.setAlignment(QtCore.Qt.AlignTop)
+            vbox2.setSpacing(0)
+            vbox.setContentsMargins(0, 0, 0, 0)
+
+        cb = QtGui.QCheckBox(rating.text, w)
+        cb.setChecked(True)
+
+        # FIXME: attach a context menu to each checkbox with commands such as:
+        #  -select only this
+        #  -[un]select everything above/below
+
+        rating.checkbox = cb
+
+        QtCore.QObject.connect(
+            cb, QtCore.SIGNAL("stateChanged(int)"), M.updateRouteFilter)
+
+        vbox2.addWidget(cb)
+
+        if vbox2.count() == 5:
+            hbox.addLayout(vbox2)
+            vbox2 = None
+
+    if vbox2:
+        hbox.addLayout(vbox2)
+
     hbox.addStretch()
 
-    hbox.setSpacing(10)
+    hbox.setSpacing(5)
     hbox.setContentsMargins(5, 5, 5, 5)
 
     vbox.addLayout(hbox)
