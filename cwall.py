@@ -177,6 +177,9 @@ class Main:
         # main window
         self.mw = None
 
+        # current climbing profile
+        self.profile = ClimbingProfile()
+
         self.clear()
 
     def clear(self, initTime = True):
@@ -220,6 +223,25 @@ class Main:
             QtGui.QMessageBox.critical(
                 self.mw, "Error", "Error loading file '%s': %s" % (
                     "pump2.xml", e))
+
+    def saveProfile(self):
+        self.profile.save()
+
+    def loadProfile(self):
+        # FIXME: can't use a fixed filename
+        data = util.loadFile("osku.xml", self.mw)
+
+        if data is None:
+            return
+
+        try:
+            self.profile = ClimbingProfile.load(data)
+            self.updateRouteFilter()
+
+        except error.ConfigError, e:
+            QtGui.QMessageBox.critical(
+                self.mw, "Error", "Error loading file '%s': %s" % (
+                    "osku.xml", e))
 
     def setMode(self, modeClass, setCombo):
         if modeClass is self.modeClass:
@@ -778,7 +800,7 @@ class ClimbingProfile:
 
     def __init__(self):
         # name of person
-        self.name = None
+        self.name = "Anonymous"
 
         # key = ClimbingWall id, value = ClimbingWallProfile
         self.cwProfiles = {}
@@ -810,11 +832,11 @@ class ClimbingProfile:
 
             util.cfgAssert(version > 0, "Invalid version attribute")
 
-            util.cfgAssert(version <= cw.__class__.VERSION,
+            util.cfgAssert(version <= cp.__class__.VERSION,
                            "File uses a newer format than this program recognizes."
                            " Please upgrade your program.")
 
-            cp.name = root.get("name")
+            cp.name = util.getAttr(root, "name")
 
             for el in root.xpath("ClimbingWalls/ClimbingWall"):
                 cwProf = ClimbingWallProfile.load(el)
@@ -1552,7 +1574,7 @@ class MyWidget(QtGui.QWidget):
     def __init__(self, parent = None):
         QtGui.QWidget.__init__(self, parent)
 
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(800, 630)
         self.setFocusPolicy(QtCore.Qt.WheelFocus)
         self.setMouseTracking(True)
         self.setCursor(QtGui.QCursor(QtCore.Qt.BlankCursor))
@@ -1688,7 +1710,7 @@ def main():
     app = QtGui.QApplication(sys.argv)
 
     mw = QtGui.QMainWindow()
-    mw.move(400,50)
+    mw.move(400, 0)
     mw.setWindowTitle("Climbing walls")
     M.mw = mw
 
@@ -1696,6 +1718,9 @@ def main():
     fmenu = mb.addMenu("&File")
     fmenu.addAction("Save climbing wall", M.saveCW, QtGui.QKeySequence.Save)
     fmenu.addAction("Load climbing wall", M.loadCW, QtGui.QKeySequence.Open)
+    fmenu.addSeparator()
+    fmenu.addAction("Save profile", M.saveProfile)
+    fmenu.addAction("Load profile", M.loadProfile)
 
     w = QtGui.QWidget()
     vbox = QtGui.QVBoxLayout(w)
