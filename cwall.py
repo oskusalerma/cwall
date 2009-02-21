@@ -696,6 +696,135 @@ class ClimbingWall:
             util.cfgAssert(0, "XML parsing error: %s" % e)
 
 
+# profile of when/how one person has climbed a specific route
+class RouteProfile:
+    def __init__(self):
+        self.routeId = None
+
+        # everything below is a util.Date, or None if not done
+
+        # toproped without falls
+        self.toproped = None
+
+        # toproped, with falls
+        self.topropedFall = None
+
+        # lead-climbed without falls
+        self.leadClimbed = None
+
+        # lead-climbed with falls
+        self.leadClimbedFall = None
+
+    def toXml(self):
+        el = etree.Element("Route")
+
+        el.set("routeId", self.routeId)
+        util.saveDate(self.toproped, "toproped", el)
+        util.saveDate(self.topropedFall, "topropedFall", el)
+        util.saveDate(self.leadClimbed, "leadClimbed", el)
+        util.saveDate(self.leadClimbedFall, "leadClimbedFall", el)
+
+        return el
+
+    @staticmethod
+    def load(el):
+        rp = RouteProfile()
+
+        rp.routeId = util.getUUIDAttr(root, "routeId")
+
+        rp.toproped = util.getDateAttr(el, "toproped")
+        rp.topropedFall = util.getDateAttr(el, "topropedFall")
+        rp.leadClimbed = util.getDateAttr(el, "leadClimbed")
+        rp.leadClimbedFall = util.getDateAttr(el, "leadClimbedFall")
+
+        return rp
+
+# profile of when/how one person has climbed routes on a specific climbing
+# wall
+class ClimbingWallProfile:
+    def __init__(self):
+        self.wallId = None
+
+        # key = route id, value = RouteProfile
+        self.routeProfiles = {}
+
+    def toXml(self):
+        el = etree.Element("ClimbingWall")
+
+        el.set("wallId", self.wallId)
+
+        for route in self.routeProfiles.itervalues():
+            el.append(route.toXml())
+
+        return el
+
+    @staticmethod
+    def load(root):
+        prof = ClimbingWallProfile()
+
+        prof.wallId = util.getUUIDAttr(root, "wallId")
+
+        for el in root.xpath("Route"):
+            route = Route.load(el)
+            prof.routeProfiles[route.routeId] = route
+
+        return prof
+
+# one person's climbing profile, i.e., what routes they have climbed and
+# when
+class ClimbingProfile:
+    # file-format version that we write out
+    VERSION = 1
+
+    def __init__(self):
+        # name of person
+        self.name = None
+
+        # key = ClimbingWall id, value = ClimbingWallProfile
+        self.cwProfiles = {}
+
+    def save(self):
+        el = etree.Element("Profile")
+
+        el.set("version", str(self.__class__.VERSION))
+        el.set("name", self.name)
+
+        cwsEl = etree.SubElement(el, "ClimbingWalls")
+
+        for cwProf in self.cwProfiles.itervalues():
+            cwsEl.append(cwProf.toXml())
+
+        data = etree.tostring(el, xml_declaration = True,
+                              encoding = "UTF-8", pretty_print = True)
+
+        # FIXME: can't use fixed filename
+        util.writeToFile("osku.xml", data, M.mw)
+
+    @staticmethod
+    def load(data):
+        try:
+            root = etree.XML(data)
+            cp = ClimbingProfile()
+
+            version = util.str2int(util.getAttr(root, "version"), 0)
+
+            util.cfgAssert(version > 0, "Invalid version attribute")
+
+            util.cfgAssert(version <= cw.__class__.VERSION,
+                           "File uses a newer format than this program recognizes."
+                           " Please upgrade your program.")
+
+            cp.name = root.get("name")
+
+            for el in root.xpath("ClimbingWalls/ClimbingWall"):
+                cwProf = ClimbingWallProfile.load(el)
+                cp.cwProfiles[cwProf.wallId] = cwProf
+
+            return cp
+
+        except etree.XMLSyntaxError, e:
+            util.cfgAssert(0, "XML parsing error: %s" % e)
+
 # draw distance between two points
 def drawDistance(pnt, p1, p2):
     pnt.save()

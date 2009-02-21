@@ -71,6 +71,11 @@ class Date:
 
         return d
 
+# save Date object if it's not None
+def saveDate(date, name, el):
+    if date:
+        el.set(name, date.save())
+
 # load at most maxSize (all if -1) bytes from 'filename', returning the
 # data as a string or None on errors. pops up message boxes using 'parent'
 # as parent on errors.
