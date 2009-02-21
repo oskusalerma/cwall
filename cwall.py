@@ -150,13 +150,17 @@ class Main:
     def __init__(self):
 
         self.modes = [
+            # wall/route stuff
             ("Move walls", WallMoveMode),
             ("Add walls", WallAddMode),
             ("Split walls", WallSplitMode),
             ("Combine walls", WallCombineMode),
             ("Add routes", RouteAddMode),
             ("Edit routes", RouteEditMode),
-            ("Move routes", RouteMoveMode)
+            ("Move routes", RouteMoveMode),
+
+            # profile stuff
+            ("Edit profile", ProfileEditMode),
             ]
 
         # key = Mode subclass class object, value = index in above list
@@ -645,6 +649,31 @@ class RouteMoveMode(Mode):
         CW.paintRoutes(pnt)
 
 
+class ProfileEditMode(Mode):
+    def __init__(self):
+        Mode.__init__(self)
+
+        self.closestRoute = None
+
+    def buttonEvent(self, isPress):
+        if isPress and self.closestRoute:
+            M.profile.editProfile(CW.id, self.closestRoute)
+
+    def moveEvent(self):
+        r = getClosestRoute()
+
+        if r:
+            self.closestRoute = r
+
+    def paint(self, pnt):
+        if self.closestRoute:
+            r = self.closestRoute
+            gutil.drawEllipse(pnt, Point(r.x, r.y),
+                              CIRCLE_SIZE / M.viewportScale)
+
+        CW.paintRoutes(pnt)
+
+
 # a single continuous climbing wall, consisting of wall segments and
 # routes positioned on those segments
 class ClimbingWall:
@@ -720,8 +749,8 @@ class ClimbingWall:
 
 # profile of when/how one person has climbed a specific route
 class RouteProfile:
-    def __init__(self):
-        self.routeId = None
+    def __init__(self, routeId):
+        self.routeId = routeId
 
         # everything below is a util.Date, or None if not done
 
@@ -737,6 +766,12 @@ class RouteProfile:
         # lead-climbed with falls
         self.leadClimbedFall = None
 
+    # returns True if profile should be saved (profiles with no dates set
+    # should not be saved because they contain no information)
+    def shouldBeSaved(self):
+        return self.toproped or self.topropedFall or self.leadClimbed or\
+            self.leadClimbedFall
+
     def toXml(self):
         el = etree.Element("Route")
 
@@ -750,9 +785,9 @@ class RouteProfile:
 
     @staticmethod
     def load(el):
-        rp = RouteProfile()
+        rp = RouteProfile(None)
 
-        rp.routeId = util.getUUIDAttr(root, "routeId")
+        rp.routeId = util.getUUIDAttr(el, "routeId")
 
         rp.toproped = util.getDateAttr(el, "toproped")
         rp.topropedFall = util.getDateAttr(el, "topropedFall")
@@ -764,8 +799,8 @@ class RouteProfile:
 # profile of when/how one person has climbed routes on a specific climbing
 # wall
 class ClimbingWallProfile:
-    def __init__(self):
-        self.wallId = None
+    def __init__(self, wallId):
+        self.wallId = wallId
 
         # key = route id, value = RouteProfile
         self.routeProfiles = {}
@@ -775,22 +810,32 @@ class ClimbingWallProfile:
 
         el.set("wallId", self.wallId)
 
-        for route in self.routeProfiles.itervalues():
-            el.append(route.toXml())
+        for rp in self.routeProfiles.itervalues():
+            if rp.shouldBeSaved():
+                el.append(rp.toXml())
 
         return el
 
     @staticmethod
     def load(root):
-        prof = ClimbingWallProfile()
+        prof = ClimbingWallProfile(None)
 
         prof.wallId = util.getUUIDAttr(root, "wallId")
 
         for el in root.xpath("Route"):
-            route = Route.load(el)
+            route = RouteProfile.load(el)
             prof.routeProfiles[route.routeId] = route
 
         return prof
+
+    def getRouteProfile(self, routeId):
+        rp = self.routeProfiles.get(routeId)
+
+        if not rp:
+            rp = RouteProfile(routeId)
+            self.routeProfiles[routeId] = rp
+
+        return rp
 
 # one person's climbing profile, i.e., what routes they have climbed and
 # when
@@ -846,6 +891,25 @@ class ClimbingProfile:
 
         except etree.XMLSyntaxError, e:
             util.cfgAssert(0, "XML parsing error: %s" % e)
+
+
+    def getRouteProfile(self, wallId, routeId):
+        cwProf = self.cwProfiles.get(wallId)
+
+        if not cwProf:
+            cwProf = ClimbingWallProfile(wallId)
+            self.cwProfiles[wallId] = cwProf
+
+        return cwProf.getRouteProfile(routeId)
+
+    def editProfile(self, wallId, route):
+        rp = self.getRouteProfile(wallId, route.id)
+
+        dlg = ProfileEditDlg(rp)
+
+        with CursorShower():
+            dlg.exec_()
+
 
 # draw distance between two points
 def drawDistance(pnt, p1, p2):
@@ -996,7 +1060,6 @@ def getClosestRoute():
     return closestRoute
 
 class RouteEditDlg(QtGui.QDialog):
-
     def __init__(self, route):
         QtGui.QDialog.__init__(self, M.mw)
 
@@ -1053,6 +1116,46 @@ class RouteEditDlg(QtGui.QDialog):
         self.route.dateRemoved = self.dateRemovedW.date
 
         M.w.update()
+
+class ProfileEditDlg(QtGui.QDialog):
+    def __init__(self, rp):
+        QtGui.QDialog.__init__(self, M.mw)
+
+        # RouteProfile
+        self.rp = rp
+
+        self.setWindowTitle("Edit profile")
+
+        fl = QtGui.QFormLayout(self)
+
+        self.toproped = None
+        self.topropedFall = None
+        self.leadClimbed = None
+        self.leadClimbedFall = None
+
+        self.addDate(fl, "topropedW", "toproped", rp.toproped)
+        self.addDate(fl, "topropedFallW", "toproped with falls", rp.topropedFall)
+        self.addDate(fl, "leadClimbedW", "lead climbed", rp.leadClimbed)
+        self.addDate(fl, "leadClimbedFallW", "lead climbed with falls",
+                     rp.leadClimbedFall)
+
+    def addDate(self, fl, name, s, date):
+        w = DateWidget(self, date)
+
+        QtCore.QObject.connect(
+            w, QtCore.SIGNAL("stateChanged()"), self.gui2cfg)
+
+        fl.addRow("Date %s:" % s, w)
+
+        setattr(self, name, w)
+
+    def gui2cfg(self):
+        self.rp.toproped = self.topropedW.date
+        self.rp.topropedFall = self.topropedFallW.date
+        self.rp.leadClimbed = self.leadClimbedW.date
+        self.rp.leadClimbedFall = self.leadClimbedFallW.date
+
+        M.updateRouteFilter()
 
 # to be used for enabling cursor over main window when showing a modal
 # dialog (because the main window doesn't get mouse move events in that
