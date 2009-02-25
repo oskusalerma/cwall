@@ -94,8 +94,8 @@ class Rating:
         if not self.fractional:
             return self.checkbox.isChecked()
 
-        # for a fractiona rating like 12A/B, we're active if either 12A or
-        # 12B is active
+        # for a fractional rating like 12A/B, we're active if either 12A
+        # or 12B is active
         rat = Rating.RATINGS
 
         return (rat[self.compareIdx - 1].isActive() or
@@ -145,6 +145,38 @@ Rating.add([
         ("5.15A"), ("5.15A/B", 1), ("5.15B")
         ])
 
+class Filter:
+    def __init__(self, isInclude, hbox, parent):
+        gb = QtGui.QGroupBox(isInclude and "Include" or "Exclude", parent)
+
+        vbox = QtGui.QVBoxLayout(gb)
+        vbox.setAlignment(
+            isInclude and QtCore.Qt.AlignTop or QtCore.Qt.AlignBottom)
+
+        vbox.setSpacing(0)
+        vbox.setContentsMargins(5, 0, 0, 0)
+
+        if isInclude:
+            self.addCB(vbox, "allCB", "All", gb)
+
+        self.addCB(vbox, "topropedCB", "Toproped", gb)
+        self.addCB(vbox, "topropedFallCB", "Toproped w/ falls", gb)
+        self.addCB(vbox, "leadClimbedCB", "Lead climbed", gb)
+        self.addCB(vbox, "leadClimbedFallCB", "Lead climbed w/ falls",
+                   gb)
+
+        hbox.addWidget(gb)
+
+    def addCB(self, vbox, name, s, parent):
+        cb = QtGui.QCheckBox(s, parent)
+
+        QtCore.QObject.connect(
+            cb, QtCore.SIGNAL("stateChanged(int)"), M.updateRouteFilter)
+
+        vbox.addWidget(cb)
+
+        setattr(self, name, cb)
+
 # misc globally needed stuff
 class Main:
     def __init__(self):
@@ -174,6 +206,10 @@ class Main:
 
         # whether to show wall lengths checkbox
         self.showWallLengthsCb = None
+
+        # Filter include/exclude objects
+        self.includeFilter = None
+        self.excludeFilter = None
 
         # main widget (MyWidget)
         self.w = None
@@ -1882,6 +1918,9 @@ def main():
 
     if vbox2:
         hbox.addLayout(vbox2)
+
+    M.includeFilter = Filter(True, hbox, w)
+    M.excludeFilter = Filter(False, hbox, w)
 
     hbox.addStretch()
 
