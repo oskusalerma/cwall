@@ -147,6 +147,8 @@ Rating.add([
 
 class Filter:
     def __init__(self, isInclude, hbox, parent):
+        self.isInclude = isInclude
+
         gb = QtGui.QGroupBox(isInclude and "Include" or "Exclude", parent)
 
         vbox = QtGui.QVBoxLayout(gb)
@@ -176,6 +178,23 @@ class Filter:
         vbox.addWidget(cb)
 
         setattr(self, name, cb)
+
+    # return True if given RouteProfile matches this filter. if rp is
+    # None, it only matches if we are an include filter and "All" is
+    # selected.
+    def matches(self, rp):
+       if self.isInclude and self.allCB.isChecked():
+            return True
+
+       if not rp:
+           return False
+
+       return (
+           (self.topropedCB.isChecked() and rp.toproped) or
+           (self.leadClimbedCB.isChecked() and rp.leadClimbed) or
+           (self.topropedFallCB.isChecked() and rp.topropedFall) or
+           (self.leadClimbedFallCB.isChecked() and rp.leadClimbedFall))
+
 
 # misc globally needed stuff
 class Main:
@@ -308,6 +327,20 @@ class Main:
 
         self.mode.moveEvent()
         self.w.update()
+
+    # return true if given route should be displayed according to current
+    # profile filtering settings
+    def routeInProfileFilter(self, wallId, routeId):
+        rp = self.profile.getRouteProfile(wallId, routeId, False)
+
+        include = self.includeFilter.matches(rp)
+
+        if not include:
+            return False
+
+        exclude = self.excludeFilter.matches(rp)
+
+        return include and not exclude
 
     # transform physical coordinates to logical coordinates, returning the
     # new (x, y) pair
@@ -731,7 +764,8 @@ class ClimbingWall:
         del self.activeRoutes[:]
 
         for route in self.routes:
-            if route.rating.isActive():
+            if (route.rating.isActive() and
+                M.routeInProfileFilter(self.id, route.id)):
                 self.activeRoutes.append(route)
 
     def paintRoutes(self, pnt):
@@ -864,10 +898,13 @@ class ClimbingWallProfile:
 
         return prof
 
-    def getRouteProfile(self, routeId):
+    def getRouteProfile(self, routeId, add = False):
         rp = self.routeProfiles.get(routeId)
 
         if not rp:
+            if not add:
+                return None
+
             rp = RouteProfile(routeId)
             self.routeProfiles[routeId] = rp
 
@@ -929,17 +966,20 @@ class ClimbingProfile:
             util.cfgAssert(0, "XML parsing error: %s" % e)
 
 
-    def getRouteProfile(self, wallId, routeId):
+    def getRouteProfile(self, wallId, routeId, add = False):
         cwProf = self.cwProfiles.get(wallId)
 
         if not cwProf:
+            if not add:
+                return None
+
             cwProf = ClimbingWallProfile(wallId)
             self.cwProfiles[wallId] = cwProf
 
-        return cwProf.getRouteProfile(routeId)
+        return cwProf.getRouteProfile(routeId, add)
 
     def editProfile(self, wallId, route):
-        rp = self.getRouteProfile(wallId, route.id)
+        rp = self.getRouteProfile(wallId, route.id, True)
 
         dlg = ProfileEditDlg(rp)
 
