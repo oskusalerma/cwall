@@ -7,7 +7,7 @@ import error
 import gutil
 import util
 
-import sys, random, math
+import sys, random, math, operator
 
 import lxml.etree as etree
 from PyQt4 import QtGui, QtCore
@@ -34,9 +34,6 @@ RECTANGLE_SIZE = 20
 # font for displaying information about walls such as length etc
 WALL_FONT = QtGui.QFont("Courier New", 18)
 WALL_FONT.setPixelSize(48)
-
-# FIXME: when saving walls/routes/profiles, order output by id, so diffs
-# of the output files are meaningful
 
 class Color:
     def __init__(self, name, r, g, b):
@@ -794,7 +791,8 @@ class ClimbingWall:
 
         routesEl = etree.SubElement(el, "Routes")
 
-        for route in self.routes:
+        # order by id so output is diffable
+        for route in sorted(self.routes, key = operator.attrgetter("id")):
             routesEl.append(route.toXml())
 
         data = etree.tostring(el, xml_declaration = True,
@@ -894,7 +892,9 @@ class ClimbingWallProfile:
 
         el.set("wallId", self.wallId)
 
-        for rp in self.routeProfiles.itervalues():
+        # sort by id so output is diffable
+        for rp in sorted(self.routeProfiles.itervalues(),
+                         key = operator.attrgetter("routeId")):
             if rp.shouldBeSaved():
                 el.append(rp.toXml())
 
