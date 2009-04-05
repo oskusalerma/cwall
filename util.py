@@ -40,6 +40,58 @@ class Date:
         self.month = 0
         self.day = 0
 
+    @staticmethod
+    def now():
+        return Date.fromQDate(QtCore.QDate.currentDate())
+
+    def __lt__(self, rhs):
+        if self.year < rhs.year:
+            return True
+        elif self.year > rhs.year:
+            return False
+
+        # same year
+
+        if self.month < rhs.month:
+            return True
+        elif self.month > rhs.month:
+            return False
+
+        # same month
+
+        if self.day < rhs.day:
+            return True
+        elif self.day > rhs.day:
+            return False
+
+        # same day
+
+        return False
+
+    def __ge__(self, rhs):
+        if self.year > rhs.year:
+            return True
+        elif self.year < rhs.year:
+            return False
+
+        # same year
+
+        if self.month > rhs.month:
+            return True
+        elif self.month < rhs.month:
+            return False
+
+        # same month
+
+        if self.day > rhs.day:
+            return True
+        elif self.day < rhs.day:
+            return False
+
+        # same day
+
+        return True
+
     def save(self):
         return "%04d-%02d-%02d" % (self.year, self.month, self.day)
 

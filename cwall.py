@@ -35,6 +35,9 @@ RECTANGLE_SIZE = 20
 WALL_FONT = QtGui.QFont("Courier New", 18)
 WALL_FONT.setPixelSize(48)
 
+# FIXME: when saving walls/routes/profiles, order output by id, so diffs
+# of the output files are meaningful
+
 class Color:
     def __init__(self, name, r, g, b):
         self.name = name
@@ -296,6 +299,9 @@ class Main:
         try:
             self.profile = ClimbingProfile.load(data)
             self.updateRouteFilter()
+
+            # FIXME: debug stuff, remove
+            print "loaded profile osku.xml"
 
         except error.ConfigError, e:
             QtGui.QMessageBox.critical(
@@ -763,9 +769,17 @@ class ClimbingWall:
     def updateRouteFilter(self):
         del self.activeRoutes[:]
 
+        showDeleted = M.showDeletedCb.isChecked()
+
+        if not showDeleted:
+            now = util.Date.now()
+        else:
+            now = None
+
         for route in self.routes:
             if (route.rating.isActive() and
-                M.routeInProfileFilter(self.id, route.id)):
+                M.routeInProfileFilter(self.id, route.id) and
+                (showDeleted or route.existedAt(now))):
                 self.activeRoutes.append(route)
 
     def paintRoutes(self, pnt):
@@ -939,6 +953,9 @@ class ClimbingProfile:
 
         # FIXME: can't use fixed filename
         util.writeToFile("osku.xml", data, M.mw)
+
+        # FIXME: debug stuff, remove
+        print "saved profile osku.xml"
 
     @staticmethod
     def load(data):
@@ -1522,6 +1539,13 @@ class Route:
 
         # FIXME: save/load flipside, make editable on dialog
 
+    # returns whether route existed at given date (util.Date)
+    def existedAt(self, date):
+        notBefore = not self.dateAdded or (date >= self.dateAdded)
+        notAfter = not self.dateRemoved or (date < self.dateRemoved)
+
+        return notBefore and notAfter
+
     def attachTo(self, wall, t):
         if self.wall:
             self.wall.routes.remove(self)
@@ -1917,13 +1941,25 @@ def main():
 
     hbox.addWidget(M.modeCombo)
 
+    vbox2 = QtGui.QVBoxLayout()
+    vbox2.setAlignment(QtCore.Qt.AlignTop)
+
     M.showWallLengthsCb = QtGui.QCheckBox("Show wall lengths", w)
 
     QtCore.QObject.connect(M.showWallLengthsCb, QtCore.SIGNAL("stateChanged(int)"),
                            w.update)
 
-    hbox.addWidget(M.showWallLengthsCb)
+    vbox2.addWidget(M.showWallLengthsCb)
 
+
+    M.showDeletedCb = QtGui.QCheckBox("Show deleted routes", w)
+
+    QtCore.QObject.connect(M.showDeletedCb, QtCore.SIGNAL("stateChanged(int)"),
+                           M.updateRouteFilter)
+
+    vbox2.addWidget(M.showDeletedCb)
+
+    hbox.addLayout(vbox2)
 
     vbox2 = None
 
