@@ -1,0 +1,65 @@
+-walls
+
+ -position/length editing numerically
+
+-routes
+
+ -deleting
+
+ -configurable settings for how routes are drawn
+
+  -"5." included or not
+
+  -color included textually or not
+
+ -tweakable positioning
+
+-user profiles
+
+ -adding
+
+ -selecting
+
+-interface
+
+ -file menu: quit
+
+ -about
+
+ -grid
+
+  -snap to grid
+
+ -wall linecap and bevel style fixes
+
+ -middle button pans
+
+ -3D mode
+
+-if route is marked as removed, it does not get removed from display
+immediately (filter not updated probably)
+
+-things not handled:
+
+ -routes:
+
+  -routes not marked by tape but by specific color of holds
+
+  -routes marked with same tape but splitting into different goals and
+   different ratings along the way
+
+  -route markers:
+
+   -X shape
+
+    -one on NE wall of pump2, blue 5.10C, now marked as a cross
+
+    -N wall of pump2, yellow 11A now marked as a cross
+
+   -two colors used in markers:
+
+    -square inside square
+
+  -difficulties such as 10D/11A
+
+   -one on north wall of pump2, orange square, now marked 10D
